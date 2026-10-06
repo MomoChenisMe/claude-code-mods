@@ -4,7 +4,7 @@
 
 It adds two status rows under the Claude Code prompt, in any project:
 
-![statusbar screenshot: the old one-row version](docs/screenshot.png)
+![statusbar screenshot: two rows under auto mode, with model/effort, ctx/7d and 5h/Fable columns](docs/screenshot.png)
 
 ```
 ⏵⏵ auto mode on (shift+tab to cycle)

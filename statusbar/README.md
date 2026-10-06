@@ -4,7 +4,7 @@
 
 在 Claude Code 輸入框下方加兩列狀態列，任何專案都能用：
 
-![statusbar 截圖：舊版單列的模型、effort、ctx、5h、7d、Fable](docs/screenshot.png)
+![statusbar 截圖：auto mode 下方兩列，模型／effort、ctx／7d、5h／Fable 三欄](docs/screenshot.png)
 
 ```
 ⏵⏵ auto mode on (shift+tab to cycle)
