@@ -150,6 +150,43 @@ test('/clear 之後沒有 session.start，模型、effort 與用量仍然補讀'
   expect(await ui.find({ type: 'Text', text: ' Opus 5.5 ' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: ' xhigh ' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '7d  ▰▰▰▱▱▱▱▱▱▱  33% ' })).toBeDefined()
+  // 還沒有回覆、也估不出來時，ctx 畫成 0%。
+  expect(await ui.find({ type: 'Text', text: 'ctx ▱▱▱▱▱▱▱▱▱▱  0% ' })).toBeDefined()
+})
+
+test('第一次回覆前先用本機估算的 ctx', async ($, on) => {
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('session.usage', ($, e) => ({
+    value: {
+      startedAt: 0,
+      context:
+        e?.breakdown === 'summary'
+          ? { window: 200000, breakdown: { totalTokens: 8000 } as never }
+          : { window: 200000 },
+      rateLimits: [],
+    },
+  }))
+  on('settings.read', () => ({ value: { effortLevel: 'xhigh' } }))
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('session.measure', ($, e) => ({ changed: e.changed }))
+  on('ui.render', { component: 'PromptHint' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text dimColor>{e.props.hint}</Text>
+  })
+
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: false })
+  const ui = await $.ui.mount({ plugin: 'statusbar', surface: 'terminal', ...HINT })
+
+  // 8000 / 200000 = 4%。
+  expect(await ui.find({ type: 'Text', text: 'ctx ▱▱▱▱▱▱▱▱▱▱  4% ' })).toBeDefined()
+
+  // 開 session 後引擎會先量一次，還沒有 ctx：估算值不能被蓋掉。
+  await $.session.measure({ context: { window: 200000 }, rateLimits: [], changed: [] })
+  expect(await ui.find({ type: 'Text', text: 'ctx ▱▱▱▱▱▱▱▱▱▱  4% ' })).toBeDefined()
+
+  // 第一次回覆後量到實際值。
+  await $.session.measure({ context: { window: 200000, percent: 6 }, rateLimits: [], changed: [] })
+  expect(await ui.find({ type: 'Text', text: 'ctx ▰▱▱▱▱▱▱▱▱▱  6% ' })).toBeDefined()
 })
 
 // 按鈕測試的引擎替身：記下送出的指令與訊息。
@@ -186,9 +223,9 @@ test('按 ▾ 送出 /model、/effort，按一次 → 就以使用者的話送�
   expect(ran).toEqual(['model', 'effort'])
   expect(said).toEqual(['繼續工作'])
   expect(await ui.find({ type: 'Button', key: 'continue', text: '→' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: 'compact' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: 'continue' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: 'clear' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' compact  ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' continue ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' clear    ' })).toBeDefined()
 })
 
 for (const [command, glyph] of [

@@ -27,7 +27,7 @@ const ROSE = '#c9605f'
 const RED = '#b03a3a'
 
 // 寬版（兩列三欄、有進度條）要的寬度；終端機比這窄就改用三列、只有百分比的窄版。
-const WIDE_COLUMNS = 84
+const WIDE_COLUMNS = 85
 
 // claude-opus-5-5 → Opus 5.5
 export const modelName = (id: string) => {
@@ -137,6 +137,21 @@ const refresh = async ($: EngineInterface) => {
     contextPercent: measured.context.percent ?? null,
     rateLimits: measured.rateLimits,
   }))
+  if (measured.context.percent === undefined) {
+    await estimateContext($, measured.context.window)
+  }
+}
+
+// 引擎要等第一次回覆才有 ctx（開 session、/clear 之後）。這之前先用本機估算：系統提示、
+// 工具與記憶檔已經佔掉的量，不發請求、不呼叫模型；回覆後由 session.measure 換成實際值。
+// 估不出來就維持空的，畫成 0%。
+const estimateContext = async ($: EngineInterface, window: number) => {
+  const { context } = await $.session.usage({ breakdown: 'summary' })
+  const tokens = context.breakdown?.totalTokens
+  if (tokens !== undefined) {
+    const estimate = Math.round((tokens / window) * 100)
+    await update($, usage, u => (u.contextPercent === null ? { ...u, contextPercent: estimate } : u))
+  }
 }
 
 // 引擎只回報 five_hour、seven_day；Fable 的週用量只在 `/usage`，借 `claude -p /usage` 讀。
@@ -184,10 +199,12 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // 開 session 後不久也會量一次，那時還沒有回覆、沒有 ctx；保留目前的值（本機估算），
+  // 不要蓋成空的。
   on('session.measure', async ($, e, next) => {
     await update($, usage, u => ({
       ...u,
-      contextPercent: e.context.percent ?? null,
+      contextPercent: e.context.percent ?? u.contextPercent,
       rateLimits: e.rateLimits,
     }))
     void refreshFable($)
@@ -241,14 +258,8 @@ export const register: Register = on => {
     )
 
     // ctx 旁的 ↓ compact（把對話壓下去）、→ 送出「繼續工作」、× clear（清掉）；compact
-    // 與 clear 會改掉整段對話，要按兩次。滑鼠移上去時，右邊浮出名稱；浮出的字疊在旁邊的
-    // 內容上，不推擠版面。有一顆在等確認時不浮出，免得和 `compact?` 疊在一起。
+    // 與 clear 會改掉整段對話，要按兩次。
     const waiting = (await read($, armed))?.command ?? null
-    const hoverLabel = (scope: string, text: string) => (
-      <Box position="absolute" left={6} display="none" hover={{ scope, display: 'flex' }}>
-        <Text dimColor>{text}</Text>
-      </Box>
-    )
     const confirmButton = (command: Armed['command'], glyph: string) => (
       <Button
         key={command}
@@ -259,8 +270,9 @@ export const register: Register = on => {
         onPress={() => void pressTwice($, command)}
       />
     )
+    // 和膠囊之間空一格，跟 7d、5h 那幾列的重置時間一樣。
     const contextActions = (
-      <Box flexShrink={0}>
+      <Box flexShrink={0} marginLeft={1}>
         {confirmButton('compact', '↓')}
         <Text> </Text>
         <Button
@@ -273,9 +285,6 @@ export const register: Register = on => {
         />
         <Text> </Text>
         {confirmButton('clear', '×')}
-        {waiting === null && hoverLabel('hint:compact', 'compact')}
-        {waiting === null && hoverLabel('hint:continue', 'continue')}
-        {waiting === null && hoverLabel('hint:clear', 'clear')}
       </Box>
     )
 
@@ -312,12 +321,31 @@ export const register: Register = on => {
       </Box>
     )
 
+    // 滑鼠移到三顆鈕上，鈕的右邊浮出反白的名稱標籤，像工具提示一樣暫時蓋在 5h 那一欄上，
+    // 不推擠版面。後畫的元素蓋在先畫的上面，所以標籤放在整列最後、位置用前面的寬度算：
+    // 寬版先是模型／effort 那一欄與 3 格間隔，ctx 列是「ctx 」、進度條（窄版沒有）、
+    // 百分比膠囊，再空一格才是鈕。三個標籤補到一樣寬，每個都整個蓋住「5h」，不會露出半個字。
+    // 有一顆在等確認時不浮出，免得和 `compact?` 疊在一起。
+    const ctxPercent = u.contextPercent ?? 0
+    const modelColumn = Math.max(modelName(u.model).length, u.effort?.length ?? 0) + 3 + 3
+    const buttonsAt = (isNarrow ? 0 : modelColumn) + 4 + (isNarrow ? 0 : 11) + percent(ctxPercent).length + 2 + 1
+    const hoverLabel = (scope: string, text: string) => (
+      <Box position="absolute" left={buttonsAt + 6} display="none" hover={{ scope, display: 'flex' }}>
+        <Text inverse>{` ${text.padEnd(8)} `}</Text>
+      </Box>
+    )
+    const hoverLabels = waiting === null && [
+      hoverLabel('hint:compact', 'compact'),
+      hoverLabel('hint:continue', 'continue'),
+      hoverLabel('hint:clear', 'clear'),
+    ]
+
     // 用量排成兩欄：短期的 ctx／5h 一列，每週的 7d／Fable 一列。終端機太窄時，
     // 5h、Fable 那欄從尾巴截斷。
     const usageColumns = [
       <Box flexDirection="column" flexShrink={0} marginRight={3}>
         <Box>
-          {gauge('ctx', u.contextPercent, 10)}
+          {gauge('ctx', ctxPercent, 10)}
           {contextActions}
         </Box>
         <Text>
@@ -350,7 +378,10 @@ export const register: Register = on => {
               {modelPill}
               {effortPill}
             </Box>
-            <Box>{usageColumns}</Box>
+            <Box>
+              {usageColumns}
+              {hoverLabels}
+            </Box>
           </Box>
         ) : (
           <Box>
@@ -359,6 +390,7 @@ export const register: Register = on => {
               {effortPill}
             </Box>
             {usageColumns}
+            {hoverLabels}
           </Box>
         )}
       </Box>
