@@ -4,16 +4,14 @@
 
 It adds one status line under the Claude Code prompt, in any project:
 
-```
- Opus 5.5   xhigh    ctx ▰▰▰▰▱▱▱▱▱▱  38%  ⇣ compact   5h ▰▰▰▱▱▱▱▱  41%  ↻18:30    7d ▰▱▱▱▱▱▱▱  12%  ↻Mon 09:00
-```
+![statusbar screenshot: model, effort, ctx, the compact button, 5h and 7d under the prompt](docs/screenshot.png)
 
 - **Model and effort**: pills. The effort pill has the color of its level: low green, medium yellow, high orange, xhigh and max red. They change at once after `/model` or `/effort`.
 - **ctx**: how much of the context window the conversation uses.
 - **⇣ compact**: the button next to ctx. A press does what `/compact` typed in the prompt does; while the model replies, it waits for the turn to end.
 - **5h and 7d**: the 5-hour and weekly usage limits, followed by the reset time. Only subscription accounts have them.
 - Each percentage has the color of its level: below 50% green, below 75% yellow, below 90% orange, else red.
-- Claude Code's own hint line (`? for shortcuts`, the mode labels) stays below it.
+- Claude Code's own hint line (`? for shortcuts`, the mode labels) still shows.
 
 ## Requirements
 

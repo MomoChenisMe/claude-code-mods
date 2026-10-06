@@ -4,16 +4,14 @@
 
 在 Claude Code 輸入框下方加一行狀態列，任何專案都能用：
 
-```
- Opus 5.5   xhigh    ctx ▰▰▰▰▱▱▱▱▱▱  38%  ⇣ compact   5h ▰▰▰▱▱▱▱▱  41%  ↻18:30    7d ▰▱▱▱▱▱▱▱  12%  ↻Mon 09:00
-```
+![statusbar 截圖：輸入框下方的模型、effort、ctx、compact 鈕、5h、7d](docs/screenshot.png)
 
 - **模型、effort**：膠囊樣式。effort 依等級上色：low 綠、medium 黃、high 橘、xhigh 和 max 紅。用 `/model`、`/effort` 切換後會立刻跟著變。
 - **ctx**：這段對話用掉多少上下文視窗。
 - **⇣ compact**：ctx 旁邊的按鈕。按下等於在輸入框送出 `/compact`；模型正在回覆時，會排隊等這一輪結束再壓縮。
 - **5h、7d**：5 小時與每週的用量額度，後面是重置時間。訂閱帳號才有這兩項。
 - 百分比依用量上色：未滿 50% 綠、未滿 75% 黃、未滿 90% 橘、其餘紅。
-- Claude Code 自己的提示列（`? for shortcuts`、模式標籤）留在它下面。
+- Claude Code 自己的提示列（`? for shortcuts`、模式標籤）照常顯示。
 
 ## 需求
 

@@ -10,6 +10,8 @@ My mods for Claude Code. This repository is a Claude Code marketplace. It is not
 | --- | --- |
 | [statusbar](statusbar/README.en.md) | A status line under the prompt: model, effort, and context, 5-hour and 7-day usage |
 
+![statusbar screenshot](statusbar/docs/screenshot.png)
+
 ## Install
 
 In the Claude Code prompt, type (replace `<mod>` with a name from the table):
