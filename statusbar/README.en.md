@@ -39,6 +39,7 @@ The narrow layout needs about 47 columns. In a narrower terminal, the 5h and Fab
 ## Requirements
 
 - Claude Code 2.1.290 or later (tested on this version). The mod API is early access, so a Claude Code release can make an update of this mod necessary.
+- Mouse clicks on the buttons (`▾`, `↓`, `→`, `×`) need Claude Code's fullscreen layout (`"tui": "fullscreen"` in settings.json). Without it, a click on a button does nothing.
 
 ## Install
 
@@ -54,6 +55,8 @@ It is not the `statusLine` setting in settings.json, and the two can show togeth
 
 ## Known limits
 
+- The text that `→` sends, `繼續工作`, is fixed Chinese. You cannot change it, and it does not follow the language setting.
+- For the 3 seconds while `↓` waits for the second press, the `compact?` text after it moves the right column 3 cells to the right. The column moves back after the press or the timeout.
 - ▾ is a small glyph next to a pill, not the pill: a mod button cannot set its text color, so a white-text pill can only be text.
 - Claude Code does not give the Fable usage to mods, so statusbar runs `claude -p /usage` in the background to read it: once when the session starts, then at most once every 5 minutes. Each run takes about 2 to 4 seconds and makes no model call. Thus the Fable number can be up to 5 minutes old.
 - After `/model`, the model name changes at once. The `/model` output has no effort, so the effort pill changes when you send the next message.
