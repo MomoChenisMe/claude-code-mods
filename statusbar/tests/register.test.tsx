@@ -44,6 +44,29 @@ test('用量列畫在輸入框下方，引擎的提示列保留', async ($, on) 
   expect(await ui.find({ type: 'Text', text: '? for shortcuts' })).toBeDefined()
 })
 
+test('按 compact 鈕送出 /compact', async ($, on) => {
+  const ran: string[] = []
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200000 }, rateLimits: [] } }))
+  on('settings.read', () => ({ value: {} }))
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.run', ($, e) => {
+    ran.push(e.command)
+    return { text: 'Compacted' }
+  })
+  on('ui.render', { component: 'PromptHint' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text dimColor>{e.props.hint}</Text>
+  })
+
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ plugin: 'statusbar', surface: 'terminal', ...HINT })
+
+  expect(await ui.find({ type: 'Button', key: 'compact', text: '⇣ compact' })).toBeDefined()
+  await ui.press({ key: 'compact' })
+  expect(ran).toEqual(['compact'])
+})
+
 // `claude plugin test` 無法在 session.append 底下墊替身，所以只單獨測解析；
 // 其他列由 hook 的 door 篩選擋掉。
 test('從 /effort、/model 的輸出列讀出變動', () => {

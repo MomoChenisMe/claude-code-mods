@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { Register } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 
 import type { Usage } from '../types'
 
@@ -46,6 +46,9 @@ export const pickerChange = (text: string) => {
   const effort = text.match(/Set effort level to (\w+)/)?.[1]
   return effort !== undefined || text.includes('Set model to') ? { effort } : null
 }
+
+// 和在輸入框打 `/compact` 一樣：記進對話，模型回覆中則排隊等這一輪結束。
+const compact = ($: EngineInterface) => $.command.run({ command: 'compact' })
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
@@ -103,7 +106,7 @@ export const register: Register = on => {
   // 畫在輸入框下方的提示列位置；引擎自己的提示列留在它下面。
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
     const hint = await next(e)
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
     const u = await read($, usage)
 
     const pill = (text: string, background: string) => (
@@ -134,16 +137,24 @@ export const register: Register = on => {
       return gauge(label, r?.percentUsed ?? null, 8, resets)
     }
 
+    // 模型、effort、ctx 與 compact 鈕不縮；終端機太窄時，從 5h、7d 的尾巴截斷。
     return (
       <Box flexDirection="column">
-        <Text wrap="truncate-end">
-          {pill(modelName(u.model), 'gray')}
-          {u.effort !== null && ' '}
-          {u.effort !== null && pill(u.effort, EFFORT_COLOR[u.effort] ?? 'gray')}
-          {gauge('ctx', u.contextPercent, 10)}
-          {limit('five_hour', '5h', hhmm)}
-          {limit('seven_day', '7d', dayHhmm)}
-        </Text>
+        <Box>
+          <Box flexShrink={0}>
+            <Text>
+              {pill(modelName(u.model), 'gray')}
+              {u.effort !== null && ' '}
+              {u.effort !== null && pill(u.effort, EFFORT_COLOR[u.effort] ?? 'gray')}
+              {gauge('ctx', u.contextPercent, 10)}{' '}
+            </Text>
+            <Button key="compact" label="⇣ compact" plain dimColor onPress={() => compact($)} />
+          </Box>
+          <Text wrap="truncate-end">
+            {limit('five_hour', '5h', hhmm)}
+            {limit('seven_day', '7d', dayHhmm)}
+          </Text>
+        </Box>
         {hint}
       </Box>
     )
