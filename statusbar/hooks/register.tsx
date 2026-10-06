@@ -50,20 +50,35 @@ export const pickerChange = (text: string) => {
 // 和在輸入框打 `/compact` 一樣：記進對話，模型回覆中則排隊等這一輪結束。
 const compact = ($: EngineInterface) => $.command.run({ command: 'compact' })
 
+// 不等第一輪對話，先把模型、設定的 effort 與用量讀進來。
+const refresh = async ($: EngineInterface) => {
+  const [model, measured, settings] = await Promise.all([
+    $.session.model(),
+    $.session.usage(),
+    $.settings.read(),
+  ])
+  const configured = typeof settings.effortLevel === 'string' ? settings.effortLevel : null
+  await update($, usage, u => ({
+    model,
+    effort: u.effort ?? configured,
+    contextPercent: measured.context.percent ?? null,
+    rateLimits: measured.rateLimits,
+  }))
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    const [model, measured, settings] = await Promise.all([
-      $.session.model(),
-      $.session.usage(),
-      $.settings.read(),
-    ])
-    const configured = typeof settings.effortLevel === 'string' ? settings.effortLevel : null
-    await update($, usage, u => ({
-      model,
-      effort: u.effort ?? configured,
-      contextPercent: measured.context.percent ?? null,
-      rateLimits: measured.rateLimits,
-    }))
+    await refresh($)
+
+    return next(e)
+  })
+
+  // `/clear` 換成新的 session，卻不發 session.start；新 session 的值是空的，
+  // 模型、effort 與用量會空白到第一輪對話結束。
+  on('classic.SessionStart', async ($, e, next) => {
+    if (e.source === 'clear') {
+      await refresh($)
+    }
 
     return next(e)
   })

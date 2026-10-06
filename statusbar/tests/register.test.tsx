@@ -44,6 +44,30 @@ test('用量列畫在輸入框下方，引擎的提示列保留', async ($, on) 
   expect(await ui.find({ type: 'Text', text: '? for shortcuts' })).toBeDefined()
 })
 
+test('/clear 之後沒有 session.start，模型、effort 與用量仍然補讀', async ($, on) => {
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('session.usage', () => ({
+    value: {
+      startedAt: 0,
+      context: { window: 200000 },
+      rateLimits: [{ kind: 'seven_day', percentUsed: 33 }],
+    },
+  }))
+  on('settings.read', () => ({ value: { effortLevel: 'xhigh' } }))
+  on('classic.SessionStart', () => ({}))
+  on('ui.render', { component: 'PromptHint' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text dimColor>{e.props.hint}</Text>
+  })
+
+  await $.classic.SessionStart({ source: 'clear' })
+  const ui = await $.ui.mount({ plugin: 'statusbar', surface: 'terminal', ...HINT })
+
+  expect(await ui.find({ type: 'Text', text: ' Opus 5.5 ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ xhigh $/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /7d ▰▰▰▱▱▱▱▱  33% $/ })).toBeDefined()
+})
+
 test('按 compact 鈕送出 /compact', async ($, on) => {
   const ran: string[] = []
   on('session.model', () => ({ value: 'claude-opus-5-5' }))

@@ -1,6 +1,6 @@
 {
   "name": "statusbar",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A status line under the Claude Code prompt: model and effort pills, and context, 5-hour and 7-day usage bars",
   "author": { "name": "MomoChen" },
   "homepage": "https://github.com/MomoChenisMe/claude-code-mods/tree/main/statusbar",
