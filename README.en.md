@@ -8,7 +8,7 @@ My mods for Claude Code. This repository is a Claude Code marketplace. It is not
 
 | Mod | What it does |
 | --- | --- |
-| [statusbar](statusbar/README.en.md) | A status line under the prompt: model, effort, and context, 5-hour and 7-day usage |
+| [statusbar](statusbar/README.en.md) | Status rows under the prompt: model, effort, and context, 5-hour, 7-day and Fable usage |
 
 ![statusbar screenshot](statusbar/docs/screenshot.png)
 

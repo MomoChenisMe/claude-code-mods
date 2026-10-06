@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "statusbar",
-      "description": "A status line under the prompt: model and effort pills, and context, 5-hour and 7-day usage bars",
+      "description": "Status rows under the prompt: model and effort pills, and context, 5-hour, 7-day and Fable usage bars",
       "source": "./statusbar"
     }
   ]

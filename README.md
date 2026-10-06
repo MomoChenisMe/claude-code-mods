@@ -8,7 +8,7 @@
 
 | mod | 用途 |
 | --- | --- |
-| [statusbar](statusbar/README.md) | 輸入框下方的狀態列：模型、effort，以及 ctx、5 小時、7 天用量 |
+| [statusbar](statusbar/README.md) | 輸入框下方的狀態列：模型、effort，以及 ctx、5 小時、7 天、Fable 用量 |
 
 ![statusbar 截圖](statusbar/docs/screenshot.png)
 

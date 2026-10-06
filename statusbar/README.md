@@ -2,16 +2,23 @@
 
 [English](README.en.md)
 
-在 Claude Code 輸入框下方加一行狀態列，任何專案都能用：
+在 Claude Code 輸入框下方加兩列狀態列，任何專案都能用：
 
-![statusbar 截圖：輸入框下方的模型、effort、ctx、compact 鈕、5h、7d](docs/screenshot.png)
+![statusbar 截圖：舊版單列的模型、effort、ctx、5h、7d、Fable](docs/screenshot.png)
 
-- **模型、effort**：膠囊樣式。effort 依等級上色：low 綠、medium 黃、high 橘、xhigh 和 max 紅。用 `/model`、`/effort` 切換後會立刻跟著變。
-- **ctx**：這段對話用掉多少上下文視窗。
-- **⇣ compact**：ctx 旁邊的按鈕。按下等於在輸入框送出 `/compact`；模型正在回覆時，會排隊等這一輪結束再壓縮。
+```
+⏵⏵ auto mode on (shift+tab to cycle)
+ Opus 5.5 ▾   ctx ▰▰▱▱▱▱▱▱▱▱  24% ▾             5h    ▰▱▱▱▱▱▱▱  9%  ↻19:00
+ xhigh ▾      7d  ▰▰▰▱▱▱▱▱▱▱  35%  ↻Sun 05:00   Fable ▰▱▱▱▱▱▱▱  17%  ↻Sun 05:00
+```
+
+- **模型、effort**：膠囊樣式，模型是灰底。effort 依等級上色：low 綠、medium 黃、high 橘、xhigh 和 max 紅。按膠囊右邊的 ▾ 等於送出 `/model`、`/effort`，直接打開切換選單；切換後膠囊立刻跟著變。
+- **ctx**：這段對話用掉多少上下文視窗。按百分比右邊的 ▾ 等於在輸入框送出 `/compact`；模型正在回覆時，會排隊等這一輪結束再壓縮。
 - **5h、7d**：5 小時與每週的用量額度，後面是重置時間。訂閱帳號才有這兩項。
-- 百分比依用量上色：未滿 50% 綠、未滿 75% 黃、未滿 90% 橘、其餘紅。
-- Claude Code 自己的提示列（`? for shortcuts`、模式標籤）照常顯示。
+- **Fable**：Fable 的每週用量，後面是重置時間。帳號有 Fable 額度才顯示。
+- 進度條依用量上色：未滿 50% 綠、未滿 75% 黃、未滿 90% 橘、其餘紅。百分比膠囊的底色：未滿 50% 藍、未滿 75% 玫瑰紅、其餘紅。
+- 百分比膠囊固定白字、深色底，不跟著主題變。
+- Claude Code 自己的提示列（`? for shortcuts`、`auto mode on`）照常顯示在最上面，狀態列在它下面。
 
 ## 需求
 
@@ -31,7 +38,9 @@
 
 ## 已知限制
 
-- compact 鈕按一下就會壓縮對話，沒有確認步驟。
+- ctx 旁的 ▾ 按一下就會壓縮對話，沒有確認步驟。
+- ▾ 是膠囊旁的小符號，不是整顆膠囊：mod 的按鈕不能設定字的顏色，白字膠囊只能是文字。
+- Claude Code 沒有把 Fable 的用量交給 mod，所以 statusbar 在背景跑 `claude -p /usage` 讀出來：開 session 時一次，之後最多每 5 分鐘一次，每次約 2～4 秒、不呼叫模型。Fable 數字因此最多落後 5 分鐘。
 - 切換 `/model` 後，模型名稱立刻變；但 `/model` 的輸出不含 effort，所以 effort 要等下一次送出訊息才更新。
 - effort 是從 `/effort` 的英文輸出 `Set effort level to …` 讀出來的。Claude Code 改了這句話時，effort 一樣會在下一次送出訊息時更新。
 
