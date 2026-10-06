@@ -1,0 +1,13 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-code-mods",
+  "description": "MomoChen's mods for Claude Code",
+  "owner": { "name": "MomoChen" },
+  "plugins": [
+    {
+      "name": "statusbar",
+      "description": "A status line under the prompt: model and effort pills, and context, 5-hour and 7-day usage bars",
+      "source": "./statusbar"
+    }
+  ]
+}

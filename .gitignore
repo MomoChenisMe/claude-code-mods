@@ -1,0 +1,5 @@
+# Claude Code 載入 mod 時自動產生的型別檔，每次載入都會重寫
+*/.claude-plugin/types/
+
+# macOS
+.DS_Store
