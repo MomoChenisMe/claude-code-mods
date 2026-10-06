@@ -1,10 +1,12 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { RateLimit, Usage } from '../types'
+import type { Armed, RateLimit, Usage } from '../types'
 
 const EMPTY: Usage = { model: '', effort: null, contextPercent: null, rateLimits: [], fable: null }
 const usage = atom({ plugin: 'statusbar', key: 'usage' } as const, EMPTY)
+// 等第二次按下的 compact／clear 鈕；null 是兩顆都沒按。
+const armed = atom({ plugin: 'statusbar', key: 'armed' } as const, null as Armed | null)
 
 const ORANGE = '#ff8700'
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -23,6 +25,9 @@ const WHITE = '#ffffff'
 const BLUE = '#3a7cc0'
 const ROSE = '#c9605f'
 const RED = '#b03a3a'
+
+// 寬版（兩列三欄、有進度條）要的寬度；終端機比這窄就改用三列、只有百分比的窄版。
+const WIDE_COLUMNS = 84
 
 // claude-opus-5-5 → Opus 5.5
 export const modelName = (id: string) => {
@@ -90,6 +95,28 @@ export const fableUsage = (text: string, now: Date): RateLimit | null => {
 // 和在輸入框打 `/<command>` 一樣：記進對話，模型回覆中則排隊等這一輪結束。
 // `/model`、`/effort` 打開選單，選完的變動由 session.append 讀回來。
 const run = ($: EngineInterface, command: string) => $.command.run({ command })
+
+// `/compact`、`/clear` 都會改掉整段對話，所以要按兩次：第一次只把鈕換成 `↓ compact?`、
+// `× clear?`，3 秒內再按同一顆才送出，否則恢復原狀；改按另一顆就換成等那一顆。
+// 比對指令與按下的時間，免得上一次的計時把新的一次提早收掉。
+const CONFIRM_MS = 3000
+
+const pressTwice = async ($: EngineInterface, command: Armed['command']) => {
+  if ((await read($, armed))?.command === command) {
+    await update($, armed, () => null)
+    await run($, command)
+    return
+  }
+  const at = await $.clock.now()
+  await update($, armed, () => ({ command, at }))
+  try {
+    await $.clock.sleep(CONFIRM_MS)
+  } catch {
+    // 計時中模組被卸下（/reload-plugins、session 結束）會中止等待；那時沒有東西要恢復。
+    return
+  }
+  await update($, armed, a => (a?.command === command && a.at === at ? null : a))
+}
 
 // 不等第一輪對話，先把模型、設定的 effort 與用量讀進來。
 const refresh = async ($: EngineInterface) => {
@@ -209,13 +236,45 @@ export const register: Register = on => {
       <Button key={command} label="▾" plain dimColor onPress={() => void run($, command)} />
     )
 
-    // `ctx ▰▰▰▰▱▱▱▱▱▱ [38%]`：標籤補到同欄一樣寬，進度條依用量上色。
+    // ctx 旁的 ↓ compact（把對話壓下去）、× clear（清掉），都要按兩次。滑鼠移上去時，
+    // 右邊浮出指令名稱；浮出的字疊在旁邊的內容上，不推擠版面。有一顆在等確認時不浮出，
+    // 免得和 `compact?` 疊在一起。
+    const waiting = (await read($, armed))?.command ?? null
+    const hoverLabel = (scope: string, text: string) => (
+      <Box position="absolute" left={4} display="none" hover={{ scope, display: 'flex' }}>
+        <Text dimColor>{text}</Text>
+      </Box>
+    )
+    const confirmButton = (command: Armed['command'], glyph: string) => (
+      <Button
+        key={command}
+        label={waiting === command ? `${glyph} ${command}?` : glyph}
+        plain
+        dimColor={waiting !== command}
+        hover={{ scope: `hint:${command}` }}
+        onPress={() => void pressTwice($, command)}
+      />
+    )
+    const contextActions = (
+      <Box flexShrink={0}>
+        {confirmButton('compact', '↓')}
+        <Text> </Text>
+        {confirmButton('clear', '×')}
+        {waiting === null && hoverLabel('hint:compact', 'compact')}
+        {waiting === null && hoverLabel('hint:clear', 'clear')}
+      </Box>
+    )
+
+    // 寬版 `ctx ▰▰▰▰▱▱▱▱▱▱ [38%]`，窄版 `ctx [38%]`：標籤補到同欄一樣寬，進度條依用量上色。
+    const isNarrow = (e.viewport?.columns ?? WIDE_COLUMNS) < WIDE_COLUMNS
     const gauge = (label: string, pct: number | null, width: number) => (
       <Text>
         <Text dimColor>{`${label} `}</Text>
-        <Text color={pct === null ? undefined : colorFor(pct)} dimColor={pct === null}>
-          {`${bar(pct ?? 0, width)} `}
-        </Text>
+        {!isNarrow && (
+          <Text color={pct === null ? undefined : colorFor(pct)} dimColor={pct === null}>
+            {`${bar(pct ?? 0, width)} `}
+          </Text>
+        )}
         {pct === null ? <Text dimColor>{` ${percent(pct)} `}</Text> : pill(percent(pct), pillColor(pct), WHITE)}
       </Text>
     )
@@ -226,47 +285,68 @@ export const register: Register = on => {
     const fiveHour = u.rateLimits.find(one => one.kind === 'five_hour')
     const sevenDay = u.rateLimits.find(one => one.kind === 'seven_day')
 
-    // 兩列對齊的表格：模型／effort 一欄，ctx／7d 一欄，5h／Fable 一欄。
-    // 終端機太窄時，5h、Fable 那欄從尾巴截斷。
+    const modelPill = (
+      <Box>
+        {pill(modelName(u.model), 'gray', 'inverseText')}
+        {control('model')}
+      </Box>
+    )
+    const effortPill = u.effort !== null && (
+      <Box>
+        {pill(u.effort, EFFORT_COLOR[u.effort] ?? 'gray', 'inverseText')}
+        {control('effort')}
+      </Box>
+    )
+
+    // 用量排成兩欄：短期的 ctx／5h 一列，每週的 7d／Fable 一列。終端機太窄時，
+    // 5h、Fable 那欄從尾巴截斷。
+    const usageColumns = [
+      <Box flexDirection="column" flexShrink={0} marginRight={3}>
+        <Box>
+          {gauge('ctx', u.contextPercent, 10)}
+          {contextActions}
+        </Box>
+        <Text>
+          {gauge('7d ', sevenDay?.percentUsed ?? null, 10)}
+          {resets(sevenDay, dayHhmm)}
+        </Text>
+      </Box>,
+      <Box flexDirection="column">
+        <Text wrap="truncate-end">
+          {gauge(u.fable === null ? '5h' : '5h   ', fiveHour?.percentUsed ?? null, 8)}
+          {resets(fiveHour, hhmm)}
+        </Text>
+        {u.fable !== null && (
+          <Text wrap="truncate-end">
+            {gauge('Fable', u.fable.percentUsed, 8)}
+            {resets(u.fable, dayHhmm)}
+          </Text>
+        )}
+      </Box>,
+    ]
+
+    // 寬版：模型／effort 疊成最左一欄，兩列三欄。窄版：模型、effort 並排在最上面一列，
+    // 用量兩欄排在下面，不畫進度條。兩種版面的用量配對一樣。
     return (
       <Box flexDirection="column">
         {hint}
-        <Box>
-          <Box flexDirection="column" flexShrink={0} marginRight={3}>
-            <Box>
-              {pill(modelName(u.model), 'gray', 'inverseText')}
-              {control('model')}
-            </Box>
-            {u.effort !== null && (
-              <Box>
-                {pill(u.effort, EFFORT_COLOR[u.effort] ?? 'gray', 'inverseText')}
-                {control('effort')}
-              </Box>
-            )}
-          </Box>
-          <Box flexDirection="column" flexShrink={0} marginRight={3}>
-            <Box>
-              {gauge('ctx', u.contextPercent, 10)}
-              {control('compact')}
-            </Box>
-            <Text>
-              {gauge('7d ', sevenDay?.percentUsed ?? null, 10)}
-              {resets(sevenDay, dayHhmm)}
-            </Text>
-          </Box>
+        {isNarrow ? (
           <Box flexDirection="column">
-            <Text wrap="truncate-end">
-              {gauge(u.fable === null ? '5h' : '5h   ', fiveHour?.percentUsed ?? null, 8)}
-              {resets(fiveHour, hhmm)}
-            </Text>
-            {u.fable !== null && (
-              <Text wrap="truncate-end">
-                {gauge('Fable', u.fable.percentUsed, 8)}
-                {resets(u.fable, dayHhmm)}
-              </Text>
-            )}
+            <Box columnGap={2}>
+              {modelPill}
+              {effortPill}
+            </Box>
+            <Box>{usageColumns}</Box>
           </Box>
-        </Box>
+        ) : (
+          <Box>
+            <Box flexDirection="column" flexShrink={0} marginRight={3}>
+              {modelPill}
+              {effortPill}
+            </Box>
+            {usageColumns}
+          </Box>
+        )}
       </Box>
     )
   })

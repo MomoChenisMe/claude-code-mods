@@ -1,4 +1,5 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
+import type { On } from 'claude-code'
 
 import { bar, colorFor, fableUsage, modelName, pickerChange, pillColor } from '../hooks/register'
 
@@ -75,12 +76,56 @@ test('狀態列畫在輸入框下方，引擎的提示列保留在上面', async
   expect(await ui.find({ type: 'Button', key: 'model', text: '▾' })).toBeDefined()
   expect(await ui.find({ type: 'Button', key: 'effort', text: '▾' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: 'ctx ▰▰▰▰▱▱▱▱▱▱  38% ' })).toBeDefined()
-  expect(await ui.find({ type: 'Button', key: 'compact', text: '▾' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', key: 'compact', text: '↓' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', key: 'clear', text: '×' })).toBeDefined()
   // 有 Fable 時，5h 的標籤補到和 Fable 一樣寬，兩列的進度條對齊。
   expect(await ui.find({ type: 'Text', text: '5h    ▰▰▰▱▱▱▱▱  41% ' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: 'Fable ▰▱▱▱▱▱▱▱  17% ' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '7d  ▱▱▱▱▱▱▱▱▱▱  --% ' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '? for shortcuts' })).toBeDefined()
+})
+
+test('終端機比寬版窄時，模型與 effort 並排在最上面，用量只留百分比', async ($, on) => {
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('session.usage', () => ({
+    value: {
+      startedAt: 0,
+      context: { window: 200000, percent: 38 },
+      rateLimits: [{ kind: 'five_hour', percentUsed: 41 }],
+    },
+  }))
+  on('settings.read', () => ({ value: { effortLevel: 'xhigh' } }))
+  on('process.run', () => ({
+    value: {
+      exitCode: 0,
+      stdout: 'Current week (Fable): 17% used\n',
+      stderr: '',
+      isStdoutTruncated: false,
+      isStderrTruncated: false,
+    },
+  }))
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('ui.render', { component: 'PromptHint' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text dimColor>{e.props.hint}</Text>
+  })
+
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({
+    plugin: 'statusbar',
+    surface: 'terminal',
+    viewport: { columns: 60, rows: 30 },
+    ...HINT,
+  })
+
+  expect(await ui.find({ type: 'Text', text: ' Opus 5.5 ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' xhigh ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'ctx  38% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '5h     41% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '7d   --% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Fable  17% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', key: 'compact', text: '↓' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /▰|▱/ })).toBeUndefined()
 })
 
 test('/clear 之後沒有 session.start，模型、effort 與用量仍然補讀', async ($, on) => {
@@ -107,29 +152,84 @@ test('/clear 之後沒有 session.start，模型、effort 與用量仍然補讀'
   expect(await ui.find({ type: 'Text', text: '7d  ▰▰▰▱▱▱▱▱▱▱  33% ' })).toBeDefined()
 })
 
-test('按膠囊旁的 ▾，送出 /model、/effort、/compact', async ($, on) => {
-  const ran: string[] = []
+// 按鈕測試的引擎替身：記下送出的指令。
+const buttons = (on: On, ran: string[]) => {
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
   on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200000 }, rateLimits: [] } }))
   on('settings.read', () => ({ value: { effortLevel: 'high' } }))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.run', ($, e) => {
     ran.push(e.command)
-    return { text: 'Compacted' }
+    return { text: '' }
   })
   on('ui.render', { component: 'PromptHint' }, ($, e) => {
     const { Text } = $.ui.resolve(e)
     return <Text dimColor>{e.props.hint}</Text>
   })
+}
+
+test('按 ▾ 送出 /model、/effort；滑鼠移到 ↓、× 會浮出名稱', async ($, on) => {
+  const ran: string[] = []
+  buttons(on, ran)
 
   await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount({ plugin: 'statusbar', surface: 'terminal', ...HINT })
 
-  expect(await ui.find({ type: 'Button', key: 'compact', text: '▾' })).toBeDefined()
   await ui.press({ key: 'model' })
   await ui.press({ key: 'effort' })
+  expect(ran).toEqual(['model', 'effort'])
+  expect(await ui.find({ type: 'Text', text: 'compact' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'clear' })).toBeDefined()
+})
+
+for (const [command, glyph] of [
+  ['compact', '↓'],
+  ['clear', '×'],
+] as const) {
+  test(`${glyph} 要按兩次：第一次換成 ${command}?，3 秒內再按才送出 /${command}，逾時恢復`, async ($, on) => {
+    const ran: string[] = []
+    const clock = mock.clock(on)
+    buttons(on, ran)
+
+    await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+    const ui = await $.ui.mount({ plugin: 'statusbar', surface: 'terminal', ...HINT })
+
+    await ui.press({ key: command })
+    expect(ran).toEqual([])
+    expect(await ui.find({ type: 'Button', key: command, text: `${glyph} ${command}?` })).toBeDefined()
+
+    await clock.advance(3000)
+    expect(await ui.find({ type: 'Button', key: command, text: glyph })).toBeDefined()
+
+    await ui.press({ key: command })
+    await clock.advance(1000)
+    await ui.press({ key: command })
+    expect(ran).toEqual([command])
+    expect(await ui.find({ type: 'Button', key: command, text: glyph })).toBeDefined()
+  })
+}
+
+test('按了 ↓ 之後改按 ×：換成等 × 確認，兩個指令都不送出', async ($, on) => {
+  const ran: string[] = []
+  const clock = mock.clock(on)
+  buttons(on, ran)
+
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ plugin: 'statusbar', surface: 'terminal', ...HINT })
+
   await ui.press({ key: 'compact' })
-  expect(ran).toEqual(['model', 'effort', 'compact'])
+  await clock.advance(2000)
+  await ui.press({ key: 'clear' })
+  expect(await ui.find({ type: 'Button', key: 'compact', text: '↓' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', key: 'clear', text: '× clear?' })).toBeDefined()
+
+  // ↓ 的計時到了，不會把 × 的等待提早收掉。
+  await clock.advance(1500)
+  expect(await ui.find({ type: 'Button', key: 'clear', text: '× clear?' })).toBeDefined()
+
+  await clock.advance(1500)
+  expect(await ui.find({ type: 'Button', key: 'clear', text: '×' })).toBeDefined()
+  expect(ran).toEqual([])
 })
 
 // `claude plugin test` 無法在 session.append 底下墊替身，所以只單獨測解析；
