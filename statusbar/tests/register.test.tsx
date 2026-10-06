@@ -152,8 +152,8 @@ test('/clear 之後沒有 session.start，模型、effort 與用量仍然補讀'
   expect(await ui.find({ type: 'Text', text: '7d  ▰▰▰▱▱▱▱▱▱▱  33% ' })).toBeDefined()
 })
 
-// 按鈕測試的引擎替身：記下送出的指令。
-const buttons = (on: On, ran: string[]) => {
+// 按鈕測試的引擎替身：記下送出的指令與訊息。
+const buttons = (on: On, ran: string[], said: string[] = []) => {
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
   on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200000 }, rateLimits: [] } }))
   on('settings.read', () => ({ value: { effortLevel: 'high' } }))
@@ -162,23 +162,32 @@ const buttons = (on: On, ran: string[]) => {
     ran.push(e.command)
     return { text: '' }
   })
+  on('prompt.submit', ($, e) => {
+    said.push(e.origin.kind === 'plugin' && e.origin.asUser === true ? e.text : `(framed) ${e.text}`)
+    return { text: e.text }
+  })
   on('ui.render', { component: 'PromptHint' }, ($, e) => {
     const { Text } = $.ui.resolve(e)
     return <Text dimColor>{e.props.hint}</Text>
   })
 }
 
-test('按 ▾ 送出 /model、/effort；滑鼠移到 ↓、× 會浮出名稱', async ($, on) => {
+test('按 ▾ 送出 /model、/effort，按一次 → 就以使用者的話送出「繼續工作」；滑鼠移上去會浮出名稱', async ($, on) => {
   const ran: string[] = []
-  buttons(on, ran)
+  const said: string[] = []
+  buttons(on, ran, said)
 
   await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount({ plugin: 'statusbar', surface: 'terminal', ...HINT })
 
   await ui.press({ key: 'model' })
   await ui.press({ key: 'effort' })
+  await ui.press({ key: 'continue' })
   expect(ran).toEqual(['model', 'effort'])
+  expect(said).toEqual(['繼續工作'])
+  expect(await ui.find({ type: 'Button', key: 'continue', text: '→' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: 'compact' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'continue' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: 'clear' })).toBeDefined()
 })
 

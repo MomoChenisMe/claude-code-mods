@@ -96,6 +96,10 @@ export const fableUsage = (text: string, now: Date): RateLimit | null => {
 // `/model`、`/effort` 打開選單，選完的變動由 session.append 讀回來。
 const run = ($: EngineInterface, command: string) => $.command.run({ command })
 
+// 和自己在輸入框打「繼續工作」再按 Enter 一樣；模型回覆中時，等這一輪結束才送出。
+const CONTINUE_TEXT = '繼續工作'
+const continueWork = ($: EngineInterface) => $.prompt.submit({ text: CONTINUE_TEXT, asUser: true })
+
 // `/compact`、`/clear` 都會改掉整段對話，所以要按兩次：第一次只把鈕換成 `↓ compact?`、
 // `× clear?`，3 秒內再按同一顆才送出，否則恢復原狀；改按另一顆就換成等那一顆。
 // 比對指令與按下的時間，免得上一次的計時把新的一次提早收掉。
@@ -236,12 +240,12 @@ export const register: Register = on => {
       <Button key={command} label="▾" plain dimColor onPress={() => void run($, command)} />
     )
 
-    // ctx 旁的 ↓ compact（把對話壓下去）、× clear（清掉），都要按兩次。滑鼠移上去時，
-    // 右邊浮出指令名稱；浮出的字疊在旁邊的內容上，不推擠版面。有一顆在等確認時不浮出，
-    // 免得和 `compact?` 疊在一起。
+    // ctx 旁的 ↓ compact（把對話壓下去）、→ 送出「繼續工作」、× clear（清掉）；compact
+    // 與 clear 會改掉整段對話，要按兩次。滑鼠移上去時，右邊浮出名稱；浮出的字疊在旁邊的
+    // 內容上，不推擠版面。有一顆在等確認時不浮出，免得和 `compact?` 疊在一起。
     const waiting = (await read($, armed))?.command ?? null
     const hoverLabel = (scope: string, text: string) => (
-      <Box position="absolute" left={4} display="none" hover={{ scope, display: 'flex' }}>
+      <Box position="absolute" left={6} display="none" hover={{ scope, display: 'flex' }}>
         <Text dimColor>{text}</Text>
       </Box>
     )
@@ -259,8 +263,18 @@ export const register: Register = on => {
       <Box flexShrink={0}>
         {confirmButton('compact', '↓')}
         <Text> </Text>
+        <Button
+          key="continue"
+          label="→"
+          plain
+          dimColor
+          hover={{ scope: 'hint:continue' }}
+          onPress={() => void continueWork($)}
+        />
+        <Text> </Text>
         {confirmButton('clear', '×')}
         {waiting === null && hoverLabel('hint:compact', 'compact')}
+        {waiting === null && hoverLabel('hint:continue', 'continue')}
         {waiting === null && hoverLabel('hint:clear', 'clear')}
       </Box>
     )

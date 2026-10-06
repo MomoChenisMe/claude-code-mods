@@ -8,16 +8,17 @@ It adds two status rows under the Claude Code prompt (three in a narrow terminal
 
 ```
 ⏵⏵ auto mode on (shift+tab to cycle)
- Opus 5.5 ▾   ctx ▰▰▱▱▱▱▱▱▱▱  24% ↓ ×           5h    ▰▱▱▱▱▱▱▱  9%  ↻19:00
+ Opus 5.5 ▾   ctx ▰▰▱▱▱▱▱▱▱▱  24% ↓ → ×         5h    ▰▱▱▱▱▱▱▱  9%  ↻19:00
  xhigh ▾      7d  ▰▰▰▱▱▱▱▱▱▱  35%  ↻Sun 05:00   Fable ▰▱▱▱▱▱▱▱  17%  ↻Sun 05:00
 ```
 
 - **Model and effort**: pills. The model pill is gray. The effort pill has the color of its level: low green, medium yellow, high orange, xhigh and max red. A press on the ▾ after a pill does what `/model` or `/effort` typed in the prompt does: it opens the picker. The pills change at once after a pick.
-- **ctx**: how much of the context window the conversation uses. Two buttons follow the percentage; the mouse over one shows its name:
+- **ctx**: how much of the context window the conversation uses. Three buttons follow the percentage; the mouse over one shows its name:
   - `↓` does what `/compact` typed in the prompt does; while the model replies, it waits for the turn to end.
+  - `→` does what typing `繼續工作` ("continue working" in Chinese) and Enter in the prompt does, on one press; while the model replies, it waits for the turn to end.
   - `×` does what `/clear` does.
-  - Each button needs two presses, to prevent an accidental press: the first press changes it to `↓ compact?` or `× clear?`, and a second press on the same button within 3 seconds sends the command. Otherwise it changes back.
-- The glyphs split the work: `▾` opens a picker; `↓` (press down) and `×` (clear away) act on the conversation.
+  - `↓` and `×` change the whole conversation, so each needs two presses, to prevent an accidental press: the first press changes it to `↓ compact?` or `× clear?`, and a second press on the same button within 3 seconds sends the command. Otherwise it changes back.
+- The glyphs split the work: `▾` opens a picker; `→` tells the model to go on; `↓` (press down) and `×` (clear away) act on the conversation.
 - **5h and 7d**: the 5-hour and weekly usage limits, followed by the reset time. Only subscription accounts have them.
 - **Fable**: the weekly Fable usage, followed by the reset time. It shows only when the account has a Fable limit.
 - Each bar has the color of its level: below 50% green, below 75% yellow, below 90% orange, else red. Each percentage pill has this background: below 50% blue, below 75% rose, else red.
@@ -29,7 +30,7 @@ If the terminal is less than 84 columns wide, the status rows change to a narrow
 ```
 ⏵⏵ auto mode on (shift+tab to cycle)
  Opus 5.5 ▾   xhigh ▾
-ctx  24% ↓ ×           5h     9%  ↻19:00
+ctx  24% ↓ → ×         5h     9%  ↻19:00
 7d   35%  ↻Sun 05:00   Fable  17%  ↻Sun 05:00
 ```
 
