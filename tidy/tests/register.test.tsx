@@ -172,6 +172,41 @@ test('從原始內容取出回報的 subagent，與完成通知的狀態和時�
   expect(noticeOf(report)).toBe(null)
 })
 
+test('問你問題：AskUserQuestion 和它前面那段說明照原樣顯示，標頭寫「等你回答」', () => {
+  const bash = (id: string) => ({ type: 'tool_use', id, name: 'Bash', input: { description: 'Check status' } })
+  const ask = (id: string) => ({ type: 'tool_use', id, name: 'AskUserQuestion', input: { questions: [] } })
+  const answer = { kind: 'answer' }
+  const plan = textKey('提交計畫如下。')!
+
+  let all = startTurn([], 't1')
+  all = addRow(all, 'a1', 'assistant', [bash('b1')])
+  all = addRow(all, 'u1', 'user', [{ type: 'tool_result', tool_use_id: 'b1' }])
+  all = addRow(all, 'a2', 'assistant', [{ type: 'thinking', thinking: '我整理了提交計畫。', signature: 'x' }])
+  all = addRow(all, 'a3', 'assistant', [text('提交計畫如下。')])
+  all = addRow(all, 'a4', 'assistant', [ask('q1')])
+  expect(all[0].rows.at(-1)).toEqual({ kind: 'tools', ids: ['q1'], ask: true })
+  // 等你回答時：說明與問題都看得到，標頭寫「等你回答」。
+  const waiting = views(all[0], false)
+  expect(waiting['b1']).toEqual({ kind: 'header', turn: 't1', label: '處理中 · 等你回答', isOpen: false })
+  expect(waiting['a3']).toEqual(answer)
+  expect(waiting[plan]).toEqual(answer)
+  // 引擎有時把寫給你的話畫成掛在思考上的摘要列，所以緊接在問題前的思考也留著。
+  expect(waiting['a2']).toEqual(answer)
+  expect(waiting['q1']).toEqual(answer)
+
+  // 你回答後模型繼續工作：問答仍留在對話裡，後面的工作收進過程。
+  all = addRow(all, 'u2', 'user', [{ type: 'tool_result', tool_use_id: 'q1' }])
+  all = addRow(all, 'a5', 'assistant', [bash('b2')])
+  all = addRow(all, 'u3', 'user', [{ type: 'tool_result', tool_use_id: 'b2' }])
+  all = addRow(all, 'a6', 'assistant', [text('提交好了。')])
+  const done = views(endTurn(all, 't1', 30_000)[0], false)
+  expect(done['b1']).toEqual({ kind: 'header', turn: 't1', label: '處理了 30 秒', isOpen: false })
+  expect(done['a3']).toEqual(answer)
+  expect(done['q1']).toEqual(answer)
+  expect(done['b2']).toEqual({ kind: 'work', isOpen: false })
+  expect(done['a6']).toEqual(answer)
+})
+
 test('時間的格式', () => {
   expect(duration(400)).toBe('1 秒')
   expect(duration(23_000)).toBe('23 秒')

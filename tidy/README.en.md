@@ -15,6 +15,7 @@ Tool calls and results, thinking that the screen shows, and the notes written be
 - **Your message**: keeps Claude Code's own grey style. tidy does not change it.
 - **Final answer**: the text after the last tool call. Its leading dot becomes a bold orange `✻`, and wrapped lines indent two cells to align.
 - When a tool fails, the line adds the count: `› 處理了 1 分 23 秒 · 1 個錯誤` ("1 min 23 s · 1 error").
+- **When Claude asks you something** (AskUserQuestion, or ExitPlanMode to approve a plan): the question and the note just before it stay in the conversation and do not fold. While Claude waits for your answer, the line reads `› 處理中 · 等你回答` ("working · waiting for your answer").
 - The `Worked for …` line at the end of each turn is hidden, because the time is already on the folded line.
 
 ### 2. Open the work

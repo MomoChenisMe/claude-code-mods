@@ -1,10 +1,11 @@
 // 一輪裡依序出現的列：模型寫的一段文字、畫在畫面上的思考內容（列 id 與內文指紋）、一次工具呼叫（tool_use id），
 // 或一輪進行中送進來的訊息（subagent 的回報、背景工作完成的通知；列 id）。
-// key 是 null：記下時還沒有內文。舊版記下的列沒有 key。agents：這次呼叫的工具全是 Agent。
+// key 是 null：記下時還沒有內文。舊版記下的列沒有 key。agents：這次呼叫的工具全是 Agent；ask：全是問你的
+// 工具（AskUserQuestion、ExitPlanMode）。
 export type Row =
   | { kind: 'text'; id: string; key?: string | null }
   | { kind: 'thought'; id: string; key: string }
-  | { kind: 'tools'; ids: string[]; agents?: true }
+  | { kind: 'tools'; ids: string[]; agents?: true; ask?: true }
   | { kind: 'note'; id: string }
 
 // 一個正在跑的工具呼叫，與它在標頭上的說明（「讀取 register.tsx」）。

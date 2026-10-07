@@ -37,7 +37,13 @@ export const addRow = (turns: Turn[], uuid: string, type: string, content: reado
     const calls = content.filter(b => b.type === 'tool_use' && typeof b.id === 'string')
     if (calls.length > 0) {
       const ids = calls.map(b => b.id as string)
-      rows.push(calls.every(b => b.name === 'Agent') ? { kind: 'tools', ids, agents: true } : { kind: 'tools', ids })
+      rows.push(
+        calls.every(b => b.name === 'Agent')
+          ? { kind: 'tools', ids, agents: true }
+          : calls.every(b => ASKS.includes(String(b.name)))
+            ? { kind: 'tools', ids, ask: true }
+            : { kind: 'tools', ids },
+      )
       const steps = calls.map(b => ({ id: b.id as string, label: describe(String(b.name), (b.input ?? {}) as Record<string, unknown>) }))
       running = [...running, ...steps]
       recent = steps[steps.length - 1].label
@@ -52,6 +58,9 @@ export const addRow = (turns: Turn[], uuid: string, type: string, content: reado
   }
   return [...turns.slice(0, -1), { ...current, rows: [...current.rows, ...rows], errors: current.errors + errors, running, recent }]
 }
+
+// 問你問題的工具：它和它前面那段說明是對話，不是過程。
+const ASKS = ['AskUserQuestion', 'ExitPlanMode']
 
 // 工具在標頭上的說明：動詞，與要顯示的那個參數（路徑只留檔名）。
 const VERBS: Record<string, [verb: string, field: string]> = {
@@ -70,6 +79,9 @@ const VERBS: Record<string, [verb: string, field: string]> = {
 
 // 「執行：Run the tests」「讀取 register.tsx」；MCP 工具是「伺服器：工具」，其他工具用名稱。
 export const describe = (name: string, input: Record<string, unknown>) => {
+  if (ASKS.includes(name)) {
+    return '等你回答'
+  }
   const field = (key: string) => (typeof input[key] === 'string' && input[key] !== '' ? (input[key] as string) : undefined)
   if (name === 'Bash') {
     const what = field('description') ?? field('command')?.split('\n')[0]
@@ -133,8 +145,20 @@ export const views = (turn: Turn, isOpen: boolean): Record<string, View> => {
     turn.durationMs !== null ? `處理了 ${duration(turn.durationMs)}${errors}` : now === undefined ? '處理中…' : `處理中 · ${now}`
   const { rows } = turn
   const kinds = rows.map(r => r.kind)
-  const lastWork = Math.max(kinds.lastIndexOf('tools'), kinds.lastIndexOf('thought'))
-  const isWork = (index: number) => kinds[index] === 'note' || index <= lastWork
+  // 問你問題的工具列，與緊接在它前面的說明：照原樣顯示，不收進過程。說明可能是文字列，也可能是思考列
+  // （引擎有時把模型寫給你的話畫成掛在思考上的摘要列）。
+  const isAsk = (row: Row | undefined) => row?.kind === 'tools' && row.ask === true
+  const asking = new Set<number>()
+  rows.forEach((row, index) => {
+    if (isAsk(row)) {
+      asking.add(index)
+      for (let k = index - 1; k >= 0 && (kinds[k] === 'thought' || kinds[k] === 'text'); k--) {
+        asking.add(k)
+      }
+    }
+  })
+  const lastWork = rows.reduce((last, row, index) => ((row.kind === 'thought' || row.kind === 'tools') && !isAsk(row) ? index : last), -1)
+  const isWork = (index: number) => kinds[index] === 'note' || (index <= lastWork && !asking.has(index))
   // 同一則回覆開好幾個 subagent 時，引擎把這些呼叫畫成自己的一列「N background agents
   // launched」，mod 畫不到；訊息列也不一定收合（只收 subagent 與背景工作的）。這兩種列不放標頭。
   const isAgents = (row: Row | undefined) => row?.kind === 'tools' && row.agents === true
