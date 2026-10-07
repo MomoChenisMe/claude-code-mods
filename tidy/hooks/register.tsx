@@ -1,5 +1,5 @@
 import { atom, memberOf, read, update } from 'claude-code'
-import type { EngineInterface, Register, RenderElement, RenderViewport, ResolveInput } from 'claude-code'
+import type { EngineInterface, Register, RenderElement, RenderViewport, ResolveInput, Timer } from 'claude-code'
 
 import type { Agent, Header, Turn, View } from '../types'
 
@@ -37,14 +37,43 @@ const change = async ($: EngineInterface, fn: (all: Turn[]) => Turn[]) => {
     after = fn(all)
     return after
   })
-  const open = await read($, expanded)
+  const [open, now] = await Promise.all([read($, expanded), $.clock.now()])
   for (const turn of after) {
     const old = before.find(t => t.id === turn.id)
     if (old !== turn) {
       const isOpen = open.includes(turn.id)
-      await paint($, old === undefined ? {} : views(old, isOpen), views(turn, isOpen))
+      await paint($, old === undefined ? {} : views(old, isOpen, now), views(turn, isOpen, now))
     }
   }
+}
+
+// 「處理中 12 秒」的時間每秒往前走：進行中的那一輪每秒重算一次，只有標頭那一列的畫法會變。
+// 這一輪結束（沒有進行中的輪次）就停。ticked 是上一次重算用的時間。
+let ticker: Timer | null = null
+let ticked = 0
+
+const tick = async ($: EngineInterface) => {
+  const current = (await read($, turns)).at(-1)
+  if (current === undefined || current.durationMs !== null) {
+    stopTicking()
+    return
+  }
+  const [open, now] = await Promise.all([read($, expanded), $.clock.now()])
+  const isOpen = open.includes(current.id)
+  await paint($, views(current, isOpen, ticked), views(current, isOpen, now))
+  ticked = now
+}
+
+const startTicking = async ($: EngineInterface) => {
+  if (ticker === null) {
+    ticked = await $.clock.now()
+    ticker = $.clock.every(1000, () => void tick($))
+  }
+}
+
+const stopTicking = () => {
+  ticker?.cancel()
+  ticker = null
 }
 
 const toggle = async ($: EngineInterface, id: string) => {
@@ -55,7 +84,8 @@ const toggle = async ($: EngineInterface, id: string) => {
   })
   const turn = (await read($, turns)).find(t => t.id === id)
   if (turn !== undefined) {
-    await paint($, views(turn, !isOpen), views(turn, isOpen))
+    const now = await $.clock.now()
+    await paint($, views(turn, !isOpen, now), views(turn, isOpen, now))
   }
 }
 
@@ -176,23 +206,31 @@ const card = async ($: EngineInterface, e: Drawn, report: string, name: string |
 }
 
 export const register: Register = on => {
-  // 重新載入 mod（/reload-plugins）時輪次表還在，照它把各列畫法補回來。新 session 的表是空的。
+  // 重新載入 mod（/reload-plugins）時輪次表還在，照它把各列畫法補回來；還在進行的那一輪接著計時。
+  // 新 session 的表是空的。
   on('session.start', async ($, e, next) => {
-    const open = await read($, expanded)
-    for (const turn of await read($, turns)) {
-      await paint($, {}, views(turn, open.includes(turn.id)))
+    const [open, now, all] = await Promise.all([read($, expanded), $.clock.now(), read($, turns)])
+    for (const turn of all) {
+      await paint($, {}, views(turn, open.includes(turn.id), now))
+    }
+    if (all.at(-1)?.durationMs === null) {
+      await startTicking($)
     }
     return next(e)
   })
 
   // 輪次表只記主對話；subagent 的輪次與列都帶 agentId。
   on('turn.start', async ($, e, next) => {
-    await change($, all => startTurn(all, e.turnId))
+    const startedAt = await $.clock.now()
+    await change($, all => startTurn(all, e.turnId, startedAt))
+    await startTicking($)
     return next(e)
   })
 
+  // 回答完、被中斷（Esc）或出錯都會結束這一輪。
   on('turn.complete', async ($, e, next) => {
     if (e.agentId === undefined) {
+      stopTicking()
       await change($, all => endTurn(all, e.turnId, e.durationMs))
     }
     return next(e)

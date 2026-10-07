@@ -15,7 +15,7 @@ Tool calls and results, thinking that the screen shows, and the notes written be
 - **Your message**: keeps Claude Code's own grey style. tidy does not change it.
 - **Final answer**: the text after the last tool call. Its leading dot becomes a bold orange `✻`, and wrapped lines indent two cells to align.
 - When a tool fails, the line adds the count: `› 處理了 1 分 23 秒 · 1 個錯誤` ("1 min 23 s · 1 error").
-- **When Claude asks you something** (AskUserQuestion, or ExitPlanMode to approve a plan): the question and the note just before it stay in the conversation and do not fold. While Claude waits for your answer, the line reads `› 處理中 · 等你回答` ("working · waiting for your answer").
+- **When Claude asks you something** (AskUserQuestion, or ExitPlanMode to approve a plan): the question and the note just before it stay in the conversation and do not fold. While Claude waits for your answer, the line reads `› 處理中 N 秒 · 等你回答` ("working N s · waiting for your answer").
 - The `Worked for …` line at the end of each turn is hidden, because the time is already on the folded line.
 
 ### 2. Open the work
@@ -24,12 +24,13 @@ Click `›` and it turns into `⌄`. The work shows as Claude Code draws it, ind
 
 ![tidy screenshot: after a click, the work is indented under the "⌄" line](docs/expanded.png)
 
-### 3. The current step while Claude works
+### 3. The elapsed time and the current step while Claude works
 
-While Claude works, the line reads `› 處理中 · <current step>` ("working · …"):
+While Claude works, the line reads `› 處理中 N 秒 · <current step>` ("working N s · …"):
 
-![tidy screenshot: while Claude works, the line reads "處理中 · 執行：Wait ten seconds"](docs/working.png)
+![tidy screenshot: while Claude works, the line reads "處理中 6 秒 · 執行：Wait twelve seconds"](docs/working.png)
 
+- The time counts from the start of the turn and changes every second. When the turn ends, the line changes to `› 處理了 N 秒`.
 - While a tool runs, the line names the tool and its argument, for example `執行：Run the tests` ("run: …") or `讀取 register.tsx` ("read …"). With several tools at once it adds "等 n 項" ("and n more").
 - After a tool finishes, the line keeps the latest step until the next tool starts or the model writes a new note (it then shows the first sentence of that note or thinking).
 - A long line is cut to fit one row.

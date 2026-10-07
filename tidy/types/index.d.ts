@@ -23,6 +23,8 @@ export type Turn = {
   // 「處理中」標頭顯示它們。舊版記下的輪次沒有。
   running?: Step[]
   recent?: string
+  // 開始的時間（epoch 毫秒）；「處理中 12 秒」從這裡算。舊版記下的輪次沒有。
+  startedAt?: number
 }
 
 // 「處理了 …」標頭：哪一輪、標籤、是否展開。

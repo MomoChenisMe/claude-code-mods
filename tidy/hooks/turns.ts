@@ -5,8 +5,8 @@ const KEEP = 200
 
 type Block = { readonly type: string; readonly [field: string]: unknown }
 
-export const startTurn = (turns: Turn[], id: string): Turn[] =>
-  [...turns, { id, rows: [], durationMs: null, errors: 0 }].slice(-KEEP)
+export const startTurn = (turns: Turn[], id: string, startedAt: number): Turn[] =>
+  [...turns, { id, rows: [], durationMs: null, errors: 0, startedAt }].slice(-KEEP)
 
 export const endTurn = (turns: Turn[], id: string, durationMs: number): Turn[] =>
   turns.map(t => (t.id === id ? { ...t, durationMs } : t))
@@ -137,12 +137,17 @@ export const textKey = (text: string) => {
 // 就是第一段思考）畫「處理了 …」，其餘藏起來：工具列一定畫得出來，文字列在有些 session 對不上。展開時
 // 標頭移到這一輪的第一列過程，展開的內容才會都在標頭下面。最後一段工具或思考之後的文字是回答。
 // 沒有過程列畫得出標頭時（例如這一輪只有一起開的 subagent），標頭畫在第一段回答上面；連回答也沒有
-// 就整輪照原樣，免得過程藏起來卻點不開。
-export const views = (turn: Turn, isOpen: boolean): Record<string, View> => {
+// 就整輪照原樣，免得過程藏起來卻點不開。now 是現在的時間，「處理中」後面寫已經過了多久。
+export const views = (turn: Turn, isOpen: boolean, now?: number): Record<string, View> => {
   const errors = turn.errors > 0 ? ` · ${turn.errors} 個錯誤` : ''
-  const now = doing(turn)
+  const action = doing(turn)
+  const elapsed = now === undefined || turn.startedAt === undefined ? '' : ` ${duration(now - turn.startedAt)}`
   const label =
-    turn.durationMs !== null ? `處理了 ${duration(turn.durationMs)}${errors}` : now === undefined ? '處理中…' : `處理中 · ${now}`
+    turn.durationMs !== null
+      ? `處理了 ${duration(turn.durationMs)}${errors}`
+      : action === undefined
+        ? `處理中${elapsed === '' ? '…' : elapsed}`
+        : `處理中${elapsed} · ${action}`
   const { rows } = turn
   const kinds = rows.map(r => r.kind)
   // 問你問題的工具列，與緊接在它前面的說明：照原樣顯示，不收進過程。說明可能是文字列，也可能是思考列
