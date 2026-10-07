@@ -27,12 +27,7 @@
 
 終端機不到 85 欄時，改成三列兩欄、不畫進度條的窄版。模型和 effort 分別在兩欄的最上面，用量的標籤放進百分比膠囊，所以每一欄的膠囊都對齊。用量的配對和寬版一樣：
 
-```
-⏵⏵ auto mode on (shift+tab to cycle)
- Opus 5.5 ▾             xhigh ▾
- ctx 24%  ↓ → ×         5h     9%  ↻19:00
- 7d  35%  ↻Sun 05:00    Fable 17%  ↻Sun 05:00
-```
+![statusbar 窄版截圖：72 欄的終端機，auto mode 下方三列兩欄，模型／ctx／7d 一欄、effort／5h／Fable 一欄，標籤都在膠囊裡](docs/narrow.png)
 
 窄版大約要 49 欄。再窄的話，5h、Fable 那欄會從尾巴切掉，最先切掉的是重置時間。
 

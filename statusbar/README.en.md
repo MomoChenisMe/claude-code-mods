@@ -27,12 +27,7 @@ It adds two status rows under the Claude Code prompt (three in a narrow terminal
 
 If the terminal is less than 85 columns wide, the status rows change to a narrow layout: three rows, two columns, and no bars. The model and the effort are at the top of the two columns, and each usage label goes into its percentage pill, so the pills in each column line up. The usage pairs stay the same as in the wide layout:
 
-```
-⏵⏵ auto mode on (shift+tab to cycle)
- Opus 5.5 ▾             xhigh ▾
- ctx 24%  ↓ → ×         5h     9%  ↻19:00
- 7d  35%  ↻Sun 05:00    Fable 17%  ↻Sun 05:00
-```
+![statusbar narrow-layout screenshot: a 72-column terminal with three rows and two columns under auto mode, model/ctx/7d in one column and effort/5h/Fable in the other, each label inside its pill](docs/narrow.png)
 
 The narrow layout needs about 49 columns. In a narrower terminal, the 5h and Fable column is cut from the end, and the reset times go first.
 
