@@ -8,12 +8,14 @@ Each turn keeps only your message and Claude's final answer. The tool calls, thi
 
 - **Your message**: keeps Claude Code's own grey style. tidy does not change it.
 - **The work**: tool calls and results, thinking that the screen shows, and the notes written between tool calls all fold into the `› 處理了 N 秒` line.
-  - While Claude works, the line reads `› 處理中…` ("working…").
+  - While Claude works, the line tells what it does now. While a tool runs, it names the tool and its argument: `› 處理中 · 執行：Run the tests` ("working · run: …"), `› 處理中 · 讀取 register.tsx` ("working · read …"); with several tools at once it adds "等 n 項" ("and n more"). Between tools, it shows the first sentence of the model's latest note or thinking. A long line is cut to fit one row.
   - When a tool fails, the line adds the count: `› 處理了 1 分 23 秒 · 1 個錯誤` ("1 min 23 s · 1 error").
   - The `(ctrl+b to run in background)` hint under a running command folds away too.
+  - A subagent's report (`Message from @…`) and the notice that a background task finished (`Agent "…" finished`, `Background command "…" completed`) fold in too. One that arrives while Claude works folds into that turn. A finish notice that arrives after the answer folds into the turn that started the task.
   - The `Worked for …` line at the end of each turn is hidden, because the time is already on the folded line.
 - **Expand**: click `›` and it turns into `⌄`. The work shows as Claude Code draws it, indented two cells under the line. Click again to fold it.
 - **Final answer**: the text after the last tool call. Its leading dot becomes a bold orange `✻`, and wrapped lines indent two cells to align.
+- **Subagent reports**: a report that arrives after the answer starts a new turn, so it stays in the conversation as a one-row card: `◆ Explore · Review Standards axis · 完成 2 分 17 秒  › 回報` (the type, the task description, and the status and time from the finish notice; 完成 means "done", 回報 means "report"). Click the row to show the full report under it, indented two cells. Click again to fold it. When the subagent failed or was stopped, the `◆` and the status are red.
 
 Expanded:
 
@@ -43,6 +45,8 @@ To stop using it, disable tidy in `/plugin`. The screen goes back to how Claude 
 - tidy only folds the conversation after it loads. Rows that were on screen before it loaded, and old conversations you bring back with `--resume`, stay as they were.
 - When the model has just written a sentence and has not called a tool yet, tidy cannot tell whether it is the final answer, so it shows it as the answer first. When the tool starts, the sentence folds into `›`.
 - Permission prompts, question dialogs and slash command output show as usual.
+- When Claude starts several subagents at once, Claude Code draws them as one `N background agents launched` row. A mod cannot draw over that row, so it stays. In such a turn, the `›` line shows above the answer.
+- The `※ recap:` summary that shows when you come back after some time is also drawn by Claude Code itself and stays. To turn it off, use `/config`.
 - tidy changes the drawing only: the transcript, the full record that `ctrl+o` opens and what the model reads stay the same.
 
 ## Development
