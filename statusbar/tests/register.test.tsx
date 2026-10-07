@@ -85,7 +85,7 @@ test('狀態列畫在輸入框下方，引擎的提示列保留在上面', async
   expect(await ui.find({ type: 'Text', text: '? for shortcuts' })).toBeDefined()
 })
 
-test('終端機比寬版窄時，模型與 effort 並排在最上面，用量只留百分比', async ($, on) => {
+test('終端機比寬版窄時，三列兩欄、標籤放進百分比膠囊，不畫進度條', async ($, on) => {
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
   on('session.usage', () => ({
     value: {
@@ -120,10 +120,10 @@ test('終端機比寬版窄時，模型與 effort 並排在最上面，用量只
 
   expect(await ui.find({ type: 'Text', text: ' Opus 5.5 ' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: ' xhigh ' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: 'ctx  38% ' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: '5h     41% ' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: '7d   --% ' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: 'Fable  17% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' ctx 38% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' 5h    41% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' 7d  --% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' Fable 17% ' })).toBeDefined()
   expect(await ui.find({ type: 'Button', key: 'compact', text: '↓' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /▰|▱/ })).toBeUndefined()
 })

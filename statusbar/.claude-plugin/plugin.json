@@ -1,6 +1,6 @@
 {
   "name": "statusbar",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Status rows under the Claude Code prompt: model and effort pills, and context, 5-hour, 7-day and Fable usage bars",
   "author": { "name": "MomoChen" },
   "homepage": "https://github.com/MomoChenisMe/claude-code-mods/tree/main/statusbar",

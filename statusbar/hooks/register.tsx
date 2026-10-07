@@ -26,7 +26,7 @@ const BLUE = '#3a7cc0'
 const ROSE = '#c9605f'
 const RED = '#b03a3a'
 
-// 寬版（兩列三欄、有進度條）要的寬度；終端機比這窄就改用三列、只有百分比的窄版。
+// 寬版（兩列三欄、有進度條）要的寬度；終端機比這窄就改用三列兩欄、標籤放進百分比膠囊的窄版。
 const WIDE_COLUMNS = 85
 
 // claude-opus-5-5 → Opus 5.5
@@ -312,19 +312,26 @@ export const register: Register = on => {
       </Box>
     )
 
-    // 寬版 `ctx ▰▰▰▰▱▱▱▱▱▱ [38%]`，窄版 `ctx [38%]`：標籤補到同欄一樣寬，進度條依用量上色。
+    // 寬版 `ctx ▰▰▰▰▱▱▱▱▱▱ [38%]`，進度條依用量上色。窄版沒有進度條，標籤放進膠囊 `[ctx 38%]`，
+    // 百分比靠右補到 3 格，同一欄的膠囊一樣寬。標籤都補到同欄一樣寬。
     const isNarrow = (e.viewport?.columns ?? WIDE_COLUMNS) < WIDE_COLUMNS
-    const gauge = (label: string, pct: number | null, width: number) => (
-      <Text>
-        <Text dimColor>{`${label} `}</Text>
-        {!isNarrow && (
+    const narrowText = (label: string, pct: number | null) => `${label} ${percent(pct).padStart(3)}`
+    const gauge = (label: string, pct: number | null, width: number) =>
+      isNarrow ? (
+        pct === null ? (
+          <Text dimColor>{` ${narrowText(label, pct)} `}</Text>
+        ) : (
+          pill(narrowText(label, pct), pillColor(pct), WHITE)
+        )
+      ) : (
+        <Text>
+          <Text dimColor>{`${label} `}</Text>
           <Text color={pct === null ? undefined : colorFor(pct)} dimColor={pct === null}>
             {`${bar(pct ?? 0, width)} `}
           </Text>
-        )}
-        {pct === null ? <Text dimColor>{` ${percent(pct)} `}</Text> : pill(percent(pct), pillColor(pct), WHITE)}
-      </Text>
-    )
+          {pct === null ? <Text dimColor>{` ${percent(pct)} `}</Text> : pill(percent(pct), pillColor(pct), WHITE)}
+        </Text>
+      )
 
     const resets = (r: RateLimit | null | undefined, when: (d: Date) => string) =>
       r?.resetsAt !== undefined && <Text dimColor>{` ↻${when(new Date(r.resetsAt))}`}</Text>
@@ -347,14 +354,22 @@ export const register: Register = on => {
 
     // 滑鼠移到三顆鈕上，鈕的右邊浮出反白的名稱標籤，像工具提示一樣暫時蓋在 5h 那一欄上，
     // 不推擠版面。後畫的元素蓋在先畫的上面，所以標籤放在整列最後、位置用前面的寬度算：
-    // 寬版先是模型／effort 那一欄與 3 格間隔，ctx 列是「ctx 」、進度條（窄版沒有）、
-    // 百分比膠囊，再空一格才是鈕。三個標籤補到一樣寬，每個都整個蓋住「5h」，不會露出半個字。
-    // 有一顆在等確認時不浮出，免得和 `compact?` 疊在一起。
+    // 寬版先是模型／effort 那一欄與 3 格間隔，ctx 列是「ctx 」、進度條、百分比膠囊；窄版的 ctx
+    // 列在模型下面那一列，只有放進標籤的膠囊。再空一格才是鈕。三個標籤補到一樣寬，每個都整個
+    // 蓋住「5h」，不會露出半個字。有一顆在等確認時不浮出，免得和 `compact?` 疊在一起。
     const ctxPercent = u.contextPercent ?? 0
     const modelColumn = Math.max(modelName(u.model).length, u.effort?.length ?? 0) + 3 + 3
-    const buttonsAt = (isNarrow ? 0 : modelColumn) + 4 + (isNarrow ? 0 : 11) + percent(ctxPercent).length + 2 + 1
+    const buttonsAt = isNarrow
+      ? narrowText('ctx', ctxPercent).length + 2 + 1
+      : modelColumn + 4 + 11 + percent(ctxPercent).length + 2 + 1
     const hoverLabel = (scope: string, text: string) => (
-      <Box position="absolute" left={buttonsAt + 6} display="none" hover={{ scope, display: 'flex' }}>
+      <Box
+        position="absolute"
+        top={isNarrow ? 1 : 0}
+        left={buttonsAt + 6}
+        display="none"
+        hover={{ scope, display: 'flex' }}
+      >
         <Text inverse>{` ${text.padEnd(8)} `}</Text>
       </Box>
     )
@@ -364,48 +379,51 @@ export const register: Register = on => {
       hoverLabel('hint:clear', 'clear'),
     ]
 
-    // 用量排成兩欄：短期的 ctx／5h 一列，每週的 7d／Fable 一列。終端機太窄時，
-    // 5h、Fable 那欄從尾巴截斷。
-    const usageColumns = [
-      <Box flexDirection="column" flexShrink={0} marginRight={3}>
-        <Box>
-          {gauge('ctx', ctxPercent, 10)}
-          {contextActions}
-        </Box>
-        <Text>
-          {gauge('7d ', sevenDay?.percentUsed ?? null, 10)}
-          {resets(sevenDay, dayHhmm)}
-        </Text>
-      </Box>,
-      <Box flexDirection="column">
-        <Text wrap="truncate-end">
-          {gauge(u.fable === null ? '5h' : '5h   ', fiveHour?.percentUsed ?? null, 8)}
-          {resets(fiveHour, hhmm)}
-        </Text>
-        {u.fable !== null && (
-          <Text wrap="truncate-end">
-            {gauge('Fable', u.fable.percentUsed, 8)}
-            {resets(u.fable, dayHhmm)}
-          </Text>
-        )}
-      </Box>,
-    ]
+    // 用量的配對：短期的 ctx／5h 一列，每週的 7d／Fable 一列。終端機太窄時，5h、Fable
+    // 那欄從尾巴截斷。
+    const ctxRow = (
+      <Box>
+        {gauge('ctx', ctxPercent, 10)}
+        {contextActions}
+      </Box>
+    )
+    const sevenDayRow = (
+      <Text>
+        {gauge('7d ', sevenDay?.percentUsed ?? null, 10)}
+        {resets(sevenDay, dayHhmm)}
+      </Text>
+    )
+    const fiveHourRow = (
+      <Text wrap="truncate-end">
+        {gauge(u.fable === null ? '5h' : '5h   ', fiveHour?.percentUsed ?? null, 8)}
+        {resets(fiveHour, hhmm)}
+      </Text>
+    )
+    const fableRow = u.fable !== null && (
+      <Text wrap="truncate-end">
+        {gauge('Fable', u.fable.percentUsed, 8)}
+        {resets(u.fable, dayHhmm)}
+      </Text>
+    )
 
-    // 寬版：模型／effort 疊成最左一欄，兩列三欄。窄版：模型、effort 並排在最上面一列，
-    // 用量兩欄排在下面，不畫進度條。兩種版面的用量配對一樣。
+    // 寬版：模型／effort 疊成最左一欄，兩列三欄。窄版：三列兩欄，模型、effort 各在一欄的最上面，
+    // 底下是那一欄的用量，所以每個膠囊都從兩條直線開始；沒有 effort 時那一格空著。
     return (
       <Box flexDirection="column">
         {hint}
         {isNarrow ? (
-          <Box flexDirection="column">
-            <Box columnGap={2}>
+          <Box>
+            <Box flexDirection="column" flexShrink={0} marginRight={3}>
               {modelPill}
-              {effortPill}
+              {ctxRow}
+              {sevenDayRow}
             </Box>
-            <Box>
-              {usageColumns}
-              {hoverLabels}
+            <Box flexDirection="column">
+              {effortPill || <Text> </Text>}
+              {fiveHourRow}
+              {fableRow}
             </Box>
+            {hoverLabels}
           </Box>
         ) : (
           <Box>
@@ -413,7 +431,14 @@ export const register: Register = on => {
               {modelPill}
               {effortPill}
             </Box>
-            {usageColumns}
+            <Box flexDirection="column" flexShrink={0} marginRight={3}>
+              {ctxRow}
+              {sevenDayRow}
+            </Box>
+            <Box flexDirection="column">
+              {fiveHourRow}
+              {fableRow}
+            </Box>
             {hoverLabels}
           </Box>
         )}
