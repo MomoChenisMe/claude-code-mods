@@ -11,9 +11,17 @@
 | [statusbar](statusbar/README.md) | 輸入框下方的狀態列：模型、effort，以及 ctx、5 小時、7 天、Fable 用量 |
 | [tidy](tidy/README.md) | 每一輪的工具呼叫和思考收成一行 `› 處理了 N 秒`，只留下你的訊息和最後回覆 |
 
-![statusbar 截圖](statusbar/docs/screenshot.png)
+### statusbar
 
-![tidy 截圖](tidy/docs/collapsed.png)
+輸入框下方的兩列：左邊是模型和 effort，右邊是 ctx、7 天、5 小時、Fable 的用量。
+
+![statusbar 截圖：輸入框下方兩列，左邊是模型與 effort，右邊是 ctx、7d、5h、Fable 的用量條](statusbar/docs/screenshot.png)
+
+### tidy
+
+中間那行 `› 處理了 15 秒` 是收起來的工作過程，點一下才展開；下面標著 `✻` 的是最後回覆。
+
+![tidy 截圖：你的訊息、收起來的「› 處理了 15 秒」一行、開頭標著 ✻ 的最後回覆](tidy/docs/collapsed.png)
 
 ## 安裝
 
