@@ -34,7 +34,7 @@ test('依序記下一輪的列；最後一次工具呼叫之後的文字是回�
       durationMs: 83_000,
       errors: 1,
       running: [],
-      said: '做好了。',
+      recent: '做好了。',
     },
   ])
   // 標頭在第一個工具列；文字列用 uuid 與內文指紋都查得到。
@@ -129,7 +129,7 @@ test('subagent：一輪進行中送進來的訊息是過程；同時開好幾個
   expect(addNote(ended, 'n3')).toBe(ended)
 })
 
-test('「處理中」後面的動作：工具的說明、跑完拿掉，沒有工具在跑時是最近說的那一句', () => {
+test('「處理中」後面的動作：正在跑的工具，沒有工具在跑時是最近一個動作（工具或說明）', () => {
   expect(describe('Bash', { command: 'npm test\nnpm run lint', description: 'Run the tests' })).toBe('執行：Run the tests')
   expect(describe('Bash', { command: 'npm test\nnpm run lint' })).toBe('執行：npm test')
   expect(describe('Read', { file_path: '/repo/hooks/register.tsx' })).toBe('讀取 register.tsx')
@@ -149,8 +149,13 @@ test('「處理中」後面的動作：工具的說明、跑完拿掉，沒有�
   expect(label(all)).toBe('處理中 · 讀取 a.ts 等 2 項')
   all = addRow(all, 'u1', 'user', [{ type: 'tool_result', tool_use_id: 'r1' }])
   expect(label(all)).toBe('處理中 · 讀取 b.ts')
+  // 跑完了、模型還沒寫新的說明（思考內容也常是空的）：保留最近開始的那個工具。
   all = addRow(all, 'u2', 'user', [{ type: 'tool_result', tool_use_id: 'r2' }])
-  expect(label(all)).toBe('處理中 · 先看兩個檔案。')
+  expect(label(all)).toBe('處理中 · 讀取 b.ts')
+  all = addRow(all, 'a2', 'assistant', [{ type: 'thinking', thinking: '', signature: 'x' }])
+  expect(label(all)).toBe('處理中 · 讀取 b.ts')
+  all = addRow(all, 'a3', 'assistant', [text('兩個檔案都看完了。接著改。')])
+  expect(label(all)).toBe('處理中 · 兩個檔案都看完了。')
   expect(label(endTurn(all, 't1', 5_000))).toBe('處理了 5 秒')
 })
 

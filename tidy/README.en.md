@@ -8,7 +8,7 @@ Each turn keeps only your message and Claude's final answer. The tool calls, thi
 
 - **Your message**: keeps Claude Code's own grey style. tidy does not change it.
 - **The work**: tool calls and results, thinking that the screen shows, and the notes written between tool calls all fold into the `› 處理了 N 秒` line.
-  - While Claude works, the line tells what it does now. While a tool runs, it names the tool and its argument: `› 處理中 · 執行：Run the tests` ("working · run: …"), `› 處理中 · 讀取 register.tsx` ("working · read …"); with several tools at once it adds "等 n 項" ("and n more"). Between tools, it shows the first sentence of the model's latest note or thinking. A long line is cut to fit one row.
+  - While Claude works, the line tells what it does now. While a tool runs, it names the tool and its argument: `› 處理中 · 執行：Run the tests` ("working · run: …"), `› 處理中 · 讀取 register.tsx` ("working · read …"); with several tools at once it adds "等 n 項" ("and n more"). After a tool finishes, the line keeps the latest step until the next tool starts or the model writes a new note (it then shows the first sentence of that note or thinking). A long line is cut to fit one row.
   - When a tool fails, the line adds the count: `› 處理了 1 分 23 秒 · 1 個錯誤` ("1 min 23 s · 1 error").
   - The `(ctrl+b to run in background)` hint under a running command folds away too.
   - A subagent's report (`Message from @…`) and the notice that a background task finished (`Agent "…" finished`, `Background command "…" completed`) fold in too. One that arrives while Claude works folds into that turn. A finish notice that arrives after the answer folds into the turn that started the task.

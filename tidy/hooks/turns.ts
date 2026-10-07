@@ -21,7 +21,7 @@ export const addRow = (turns: Turn[], uuid: string, type: string, content: reado
   const rows: Row[] = []
   let errors = 0
   let running = current.running ?? []
-  let said = current.said
+  let recent = current.recent
   if (type === 'assistant') {
     // 有內容的思考會畫成一段帶圓點的文字；空的（不給看的）不會畫，不記。
     const thinking = content.filter(b => b.type === 'thinking' && typeof b.thinking === 'string').map(b => b.thinking as string).join('')
@@ -33,22 +33,24 @@ export const addRow = (turns: Turn[], uuid: string, type: string, content: reado
     if (texts.length > 0) {
       rows.push({ kind: 'text', id: uuid, key: textKey(texts.join('')) })
     }
-    said = firstSentence(texts.join('\n')) ?? firstSentence(thinking) ?? said
+    recent = firstSentence(texts.join('\n')) ?? firstSentence(thinking) ?? recent
     const calls = content.filter(b => b.type === 'tool_use' && typeof b.id === 'string')
     if (calls.length > 0) {
       const ids = calls.map(b => b.id as string)
       rows.push(calls.every(b => b.name === 'Agent') ? { kind: 'tools', ids, agents: true } : { kind: 'tools', ids })
-      running = [...running, ...calls.map(b => ({ id: b.id as string, label: describe(String(b.name), (b.input ?? {}) as Record<string, unknown>) }))]
+      const steps = calls.map(b => ({ id: b.id as string, label: describe(String(b.name), (b.input ?? {}) as Record<string, unknown>) }))
+      running = [...running, ...steps]
+      recent = steps[steps.length - 1].label
     }
   } else if (type === 'user') {
     const results = content.filter(b => b.type === 'tool_result')
     errors = results.filter(b => b.is_error === true).length
     running = running.filter(step => !results.some(b => b.tool_use_id === step.id))
   }
-  if (rows.length === 0 && errors === 0 && running === (current.running ?? []) && said === current.said) {
+  if (rows.length === 0 && errors === 0 && running === (current.running ?? []) && recent === current.recent) {
     return turns
   }
-  return [...turns.slice(0, -1), { ...current, rows: [...current.rows, ...rows], errors: current.errors + errors, running, said }]
+  return [...turns.slice(0, -1), { ...current, rows: [...current.rows, ...rows], errors: current.errors + errors, running, recent }]
 }
 
 // 工具在標頭上的說明：動詞，與要顯示的那個參數（路徑只留檔名）。
@@ -91,10 +93,11 @@ export const firstSentence = (text: string) => {
   return line?.split(/(?<=[。！？])|(?<=[.!?])\s/)[0].trim()
 }
 
-// 「處理中」後面接的動作：正在跑的工具（同時好幾個時寫「等 n 項」），沒有就是模型最近說的那一句。
+// 「處理中」後面接的動作：正在跑的工具（同時好幾個時寫「等 n 項」）。沒有工具在跑時是最近一個動作：
+// 模型常常不寫說明、思考內容也是空的，工具跑完就保留它的說明，直到下一個工具或新的說明出現。
 const doing = (turn: Turn) => {
   const running = turn.running ?? []
-  if (running.length === 0) return turn.said
+  if (running.length === 0) return turn.recent
   return running.length === 1 ? running[0].label : `${running[0].label} 等 ${running.length} 項`
 }
 
