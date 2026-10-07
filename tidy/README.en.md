@@ -15,11 +15,19 @@ Each turn keeps only your message and Claude's final answer. The tool calls, thi
   - The `Worked for …` line at the end of each turn is hidden, because the time is already on the folded line.
 - **Expand**: click `›` and it turns into `⌄`. The work shows as Claude Code draws it, indented two cells under the line. Click again to fold it.
 - **Final answer**: the text after the last tool call. Its leading dot becomes a bold orange `✻`, and wrapped lines indent two cells to align.
-- **Subagent reports**: a report that arrives after the answer starts a new turn, so it stays in the conversation as a one-row card: `◆ Explore · Review Standards axis · 完成 2 分 17 秒  › 回報` (the type, the task description, and the status and time from the finish notice; 完成 means "done", 回報 means "report"). Click the row to show the full report under it, indented two cells. Click again to fold it. When the subagent failed or was stopped, the `◆` and the status are red.
+- **Subagent reports**: a report that arrives after the answer starts a new turn, so it stays in the conversation as a one-row card: `◆ Explore · Review Standards axis · 完成 2 分 17 秒  › 回報` (the type, the task description, and the status and time from the finish notice; 完成 means "done", 回報 means "report"). Click the row to show the full report under it, indented two cells; Claude Code gives the opened message a light grey background. Click again to fold it. When the subagent failed or was stopped, the `◆` and the status are red.
 
 Expanded:
 
 ![tidy screenshot: after a click, the work is indented under the "⌄" line](docs/expanded.png)
+
+A subagent report card, and the next turn at work with `› 處理中 · 執行：…`:
+
+![tidy screenshot: a subagent report drawn as a one-row card; in the next turn, the line names the command that runs](docs/working.png)
+
+The report card after a click:
+
+![tidy screenshot: after a click, the full report is indented two cells under the card](docs/report.png)
 
 The labels are in Traditional Chinese for now.
 
