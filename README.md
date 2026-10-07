@@ -9,8 +9,11 @@
 | mod | 用途 |
 | --- | --- |
 | [statusbar](statusbar/README.md) | 輸入框下方的狀態列：模型、effort，以及 ctx、5 小時、7 天、Fable 用量 |
+| [tidy](tidy/README.md) | 每一輪的工具呼叫和思考收成一行 `› 處理了 N 秒`，只留下你的訊息和最後回覆 |
 
 ![statusbar 截圖](statusbar/docs/screenshot.png)
+
+![tidy 截圖](tidy/docs/collapsed.png)
 
 ## 安裝
 

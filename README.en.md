@@ -9,8 +9,11 @@ My mods for Claude Code. This repository is a Claude Code marketplace. It is not
 | Mod | What it does |
 | --- | --- |
 | [statusbar](statusbar/README.en.md) | Status rows under the prompt: model, effort, and context, 5-hour, 7-day and Fable usage |
+| [tidy](tidy/README.en.md) | Folds each turn's tool calls and thinking into one line, keeping your message and the final answer |
 
 ![statusbar screenshot](statusbar/docs/screenshot.png)
+
+![tidy screenshot](tidy/docs/collapsed.png)
 
 ## Install
 

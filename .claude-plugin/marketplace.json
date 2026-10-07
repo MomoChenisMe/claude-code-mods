@@ -8,6 +8,11 @@
       "name": "statusbar",
       "description": "Status rows under the prompt: model and effort pills, and context, 5-hour, 7-day and Fable usage bars",
       "source": "./statusbar"
+    },
+    {
+      "name": "tidy",
+      "description": "Folds each turn's tool calls and thinking into one line you can expand, keeping your message and the final answer in view",
+      "source": "./tidy"
     }
   ]
 }
