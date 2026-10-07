@@ -2,34 +2,52 @@
 
 [繁體中文](README.md)
 
-Each turn keeps only your message and Claude's final answer. The tool calls, thinking and progress notes in between fold into one line, `› 處理了 N 秒` ("worked for N seconds"), that opens on a click:
+Each turn keeps only your message and Claude's final answer. The work in between folds into one line that opens on a click. The labels are in Traditional Chinese for now.
+
+## Features
+
+### 1. The work folds into one line
+
+Tool calls and results, thinking that the screen shows, and the notes written between tool calls all fold into the `› 處理了 N 秒` line ("worked for N seconds").
 
 ![tidy screenshot: your message, the folded "›" line, and the final answer marked with ✻](docs/collapsed.png)
 
 - **Your message**: keeps Claude Code's own grey style. tidy does not change it.
-- **The work**: tool calls and results, thinking that the screen shows, and the notes written between tool calls all fold into the `› 處理了 N 秒` line.
-  - While Claude works, the line tells what it does now. While a tool runs, it names the tool and its argument: `› 處理中 · 執行：Run the tests` ("working · run: …"), `› 處理中 · 讀取 register.tsx` ("working · read …"); with several tools at once it adds "等 n 項" ("and n more"). After a tool finishes, the line keeps the latest step until the next tool starts or the model writes a new note (it then shows the first sentence of that note or thinking). A long line is cut to fit one row.
-  - When a tool fails, the line adds the count: `› 處理了 1 分 23 秒 · 1 個錯誤` ("1 min 23 s · 1 error").
-  - The `(ctrl+b to run in background)` hint under a running command folds away too.
-  - A subagent's report (`Message from @…`) and the notice that a background task finished (`Agent "…" finished`, `Background command "…" completed`) fold in too. One that arrives while Claude works folds into that turn. A finish notice that arrives after the answer folds into the turn that started the task.
-  - The `Worked for …` line at the end of each turn is hidden, because the time is already on the folded line.
-- **Expand**: click `›` and it turns into `⌄`. The work shows as Claude Code draws it, indented two cells under the line. Click again to fold it.
 - **Final answer**: the text after the last tool call. Its leading dot becomes a bold orange `✻`, and wrapped lines indent two cells to align.
-- **Subagent reports**: a report that arrives after the answer starts a new turn, so it stays in the conversation as a one-row card: `◆ Explore · Review Standards axis · 完成 2 分 17 秒  › 回報` (the type, the task description, and the status and time from the finish notice; 完成 means "done", 回報 means "report"). Click the row to show the full report under it, indented two cells; Claude Code gives the opened message a light grey background. Click again to fold it. When the subagent failed or was stopped, the `◆` and the status are red.
+- When a tool fails, the line adds the count: `› 處理了 1 分 23 秒 · 1 個錯誤` ("1 min 23 s · 1 error").
+- The `Worked for …` line at the end of each turn is hidden, because the time is already on the folded line.
 
-Expanded:
+### 2. Open the work
+
+Click `›` and it turns into `⌄`. The work shows as Claude Code draws it, indented two cells under the line. Click again to fold it.
 
 ![tidy screenshot: after a click, the work is indented under the "⌄" line](docs/expanded.png)
 
-A subagent report card, and the next turn at work with `› 處理中 · 執行：…`:
+### 3. The current step while Claude works
 
-![tidy screenshot: a subagent report drawn as a one-row card; in the next turn, the line names the command that runs](docs/working.png)
+While Claude works, the line reads `› 處理中 · <current step>` ("working · …"):
 
-The report card after a click:
+![tidy screenshot: while Claude works, the line reads "處理中 · 執行：Wait ten seconds"](docs/working.png)
+
+- While a tool runs, the line names the tool and its argument, for example `執行：Run the tests` ("run: …") or `讀取 register.tsx` ("read …"). With several tools at once it adds "等 n 項" ("and n more").
+- After a tool finishes, the line keeps the latest step until the next tool starts or the model writes a new note (it then shows the first sentence of that note or thinking).
+- A long line is cut to fit one row.
+
+### 4. Subagent report cards
+
+A subagent report that arrives after the answer starts a new turn, so it stays in the conversation as a one-row card: the type, the task description, and the status and time from the finish notice (完成 means "done", 回報 means "report").
+
+![tidy screenshot: a subagent report drawn as the one-row card "◆ Explore · 整理 statusbar 的按鈕 · 完成 5 秒 › 回報"](docs/card.png)
+
+Click the row to show the full report under it, indented two cells; Claude Code gives the opened message a light grey background. Click again to fold it. When the subagent failed or was stopped, the `◆` and the status are red.
 
 ![tidy screenshot: after a click, the full report is indented two cells under the card](docs/report.png)
 
-The labels are in Traditional Chinese for now.
+### 5. Other rows that fold away
+
+- The `(ctrl+b to run in background)` hint under a running command.
+- A subagent report (`Message from @…`) that arrives while Claude works. It folds into that turn.
+- The notice that a background task finished (`Agent "…" finished`, `Background command "…" completed`). One that arrives while Claude works folds into that turn. One that arrives after the answer folds into the turn that started the task.
 
 ## Requirements
 
