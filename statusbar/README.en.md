@@ -13,7 +13,7 @@ It adds two status rows under the Claude Code prompt (three in a narrow terminal
 ```
 
 - **Model and effort**: pills. The model pill is gray. The effort pill has the color of its level: low green, medium yellow, high orange, xhigh and max red. A press on the ▾ after a pill does what `/model` or `/effort` typed in the prompt does: it opens the picker. The pills change at once after a pick.
-- **ctx**: how much of the context window the conversation uses. After a session starts or after `/clear`, Claude Code has no figure until the model's first reply. Until then, the pill shows a local estimate: what the system prompt, the tools and the memory files already use. The estimate sends no request and makes no model call. After the reply, the pill shows the real figure. Three buttons follow the percentage after one space. When the mouse is on a button, a label with its name shows next to it in inverted colors; the label covers the 5h column until the mouse moves away:
+- **ctx**: how much of the context window the conversation uses. After a session starts, after `/clear` and after a compact, Claude Code has no figure until the model's first reply. Until then, the pill shows a local estimate: what the system prompt, the tools, the memory files and the conversation already use. The estimate sends no request and makes no model call. After the reply, the pill shows the real figure. A conversation brought back with `/resume` shows the real figure from its last reply. Three buttons follow the percentage after one space. When the mouse is on a button, a label with its name shows next to it in inverted colors; the label covers the 5h column until the mouse moves away:
   - `↓` does what `/compact` typed in the prompt does; while the model replies, it waits for the turn to end.
   - `→` does what typing `繼續工作` ("continue working" in Chinese) and Enter in the prompt does, on one press; while the model replies, it waits for the turn to end.
   - `×` does what `/clear` does.
@@ -55,7 +55,7 @@ It is not the `statusLine` setting in settings.json, and the two can show togeth
 
 ## Known limits
 
-- After a session starts or after `/clear`, ctx is an estimate. It can differ from the real figure after the first reply by about 1 percentage point.
+- After a session starts, after `/clear` and after a compact, ctx is an estimate. It can differ from the real figure after the first reply by about 1 percentage point.
 - The text that `→` sends, `繼續工作`, is fixed Chinese. You cannot change it, and it does not follow the language setting.
 - For the 3 seconds while `↓` waits for the second press, the `compact?` text after it moves the right column 4 cells to the right. The column moves back after the press or the timeout.
 - ▾ is a small glyph next to a pill, not the pill: a mod button cannot set its text color, so a white-text pill can only be text.

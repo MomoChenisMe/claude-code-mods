@@ -122,28 +122,42 @@ const pressTwice = async ($: EngineInterface, command: Armed['command']) => {
   await update($, armed, a => (a?.command === command && a.at === at ? null : a))
 }
 
-// 不等第一輪對話，先把模型、設定的 effort 與用量讀進來。
-const refresh = async ($: EngineInterface) => {
+// 不等第一輪對話，先把模型、設定的 effort 與用量讀進來。`/resume` 接回的對話帶著它最後一次
+// 回覆的 token 數（contextTokens），ctx 照它算；這時引擎的值還是換過去之前那段對話的。
+const refresh = async ($: EngineInterface, contextTokens?: number) => {
   const [model, measured, settings] = await Promise.all([
     $.session.model(),
     $.session.usage(),
     $.settings.read(),
   ])
   const configured = typeof settings.effortLevel === 'string' ? settings.effortLevel : null
+  const window = measured.context.window
+  const percent = contextTokens === undefined ? measured.context.percent : Math.round((contextTokens / window) * 100)
   await update($, usage, u => ({
     ...u,
     model,
     effort: u.effort ?? configured,
-    contextPercent: measured.context.percent ?? null,
+    contextPercent: percent ?? null,
     rateLimits: measured.rateLimits,
   }))
-  if (measured.context.percent === undefined) {
-    await estimateContext($, measured.context.window)
+  if (percent === undefined) {
+    await estimateContext($, window)
   }
 }
 
-// 引擎要等第一次回覆才有 ctx（開 session、/clear 之後）。這之前先用本機估算：系統提示、
-// 工具與記憶檔已經佔掉的量，不發請求、不呼叫模型；回覆後由 session.measure 換成實際值。
+// compact 換掉對話後，引擎要等下一次回覆才有新的 ctx，在那之前還是 compact 前的數字。
+// 新的對話在 session.compact 的 hook 都回去之後才換上，所以等一下再讀，改用本機估算。
+const refreshAfterCompact = async ($: EngineInterface) => {
+  try {
+    await $.clock.sleep(0)
+  } catch {
+    return
+  }
+  await refresh($)
+}
+
+// 引擎要等第一次回覆才有 ctx（開 session、/clear、compact 之後）。這之前先用本機估算：系統提示、
+// 工具、記憶檔與對話已經佔掉的量，不發請求、不呼叫模型；回覆後由 session.measure 換成實際值。
 // 估不出來就維持空的，畫成 0%。
 const estimateContext = async ($: EngineInterface, window: number) => {
   const { context } = await $.session.usage({ breakdown: 'summary' })
@@ -187,16 +201,26 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // `/clear` 換成新的 session，卻不發 session.start；新 session 的值是空的，
+  // `/clear`、`/resume` 換成另一個 session，卻不發 session.start；新 session 的值是空的，
   // 模型、effort 與用量會空白到第一輪對話結束。
   on('classic.SessionStart', async ($, e, next) => {
-    if (e.source === 'clear') {
-      await refresh($)
+    if (e.source === 'clear' || e.source === 'resume') {
+      await refresh($, e.context_tokens)
       fableReadAt = 0
       void refreshFable($)
     }
 
     return next(e)
+  })
+
+  // 主對話的 compact（`/compact`、自動 compact、ctx 旁的 ↓）；precompute 只是先算好摘要，對話不變。
+  on('session.compact', async ($, e, next) => {
+    const done = await next(e)
+    if (e.agentId === undefined && e.trigger !== 'precompute' && done.skip === undefined) {
+      void refreshAfterCompact($)
+    }
+
+    return done
   })
 
   // 開 session 後不久也會量一次，那時還沒有回覆、沒有 ctx；保留目前的值（本機估算），

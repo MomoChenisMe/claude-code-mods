@@ -189,6 +189,65 @@ test('第一次回覆前先用本機估算的 ctx', async ($, on) => {
   expect(await ui.find({ type: 'Text', text: 'ctx ▰▱▱▱▱▱▱▱▱▱  6% ' })).toBeDefined()
 })
 
+test('/resume 之後沒有 session.start，ctx 照接回的對話最後一次回覆算', async ($, on) => {
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  // 這時引擎的值還是換過去之前那段對話的。
+  on('session.usage', () => ({
+    value: { startedAt: 0, context: { window: 200000, percent: 40 }, rateLimits: [{ kind: 'seven_day', percentUsed: 33 }] },
+  }))
+  on('settings.read', () => ({ value: { effortLevel: 'xhigh' } }))
+  on('classic.SessionStart', () => ({}))
+  on('ui.render', { component: 'PromptHint' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text dimColor>{e.props.hint}</Text>
+  })
+
+  await $.classic.SessionStart({ source: 'resume', context_tokens: 24000 })
+  const ui = await $.ui.mount({ plugin: 'statusbar', surface: 'terminal', ...HINT })
+
+  expect(await ui.find({ type: 'Text', text: ' Opus 5.5 ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '7d  ▰▰▰▱▱▱▱▱▱▱  33% ' })).toBeDefined()
+  // 24000 / 200000 = 12%。
+  expect(await ui.find({ type: 'Text', text: 'ctx ▰▱▱▱▱▱▱▱▱▱  12% ' })).toBeDefined()
+})
+
+test('compact 之後 ctx 改用本機估算，不停在 compact 前的數字', async ($, on) => {
+  const summary = [{ role: 'user', text: '摘要', toolUses: [] }] as never
+  const clock = mock.clock(on)
+  let compacted = false
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  // compact 前量到 40%；compact 後引擎沒有 ctx，估算是 8000 / 200000 = 4%。
+  on('session.usage', ($, e) => ({
+    value: {
+      startedAt: 0,
+      context: !compacted
+        ? { window: 200000, percent: 40 }
+        : e?.breakdown === 'summary'
+          ? { window: 200000, breakdown: { totalTokens: 8000 } as never }
+          : { window: 200000 },
+      rateLimits: [],
+    },
+  }))
+  on('settings.read', () => ({ value: { effortLevel: 'xhigh' } }))
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('session.compact', () => {
+    compacted = true
+    return { messages: summary }
+  })
+  on('ui.render', { component: 'PromptHint' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text dimColor>{e.props.hint}</Text>
+  })
+
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: false })
+  const ui = await $.ui.mount({ plugin: 'statusbar', surface: 'terminal', ...HINT })
+  expect(await ui.find({ type: 'Text', text: 'ctx ▰▰▰▰▱▱▱▱▱▱  40% ' })).toBeDefined()
+
+  await $.session.compact({ trigger: 'manual', messages: summary } as never)
+  await clock.advance(0)
+  expect(await ui.find({ type: 'Text', text: 'ctx ▱▱▱▱▱▱▱▱▱▱  4% ' })).toBeDefined()
+})
+
 // 按鈕測試的引擎替身：記下送出的指令與訊息。
 const buttons = (on: On, ran: string[], said: string[] = []) => {
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
