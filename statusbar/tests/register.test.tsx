@@ -282,9 +282,33 @@ test('按 ▾ 送出 /model、/effort，按一次 → 就以使用者的話送�
   expect(ran).toEqual(['model', 'effort'])
   expect(said).toEqual(['繼續工作'])
   expect(await ui.find({ type: 'Button', key: 'continue', text: '→' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' compact  ' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' continue ' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' clear    ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' compact     ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' continue    ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' clear       ' })).toBeDefined()
+})
+
+test('按一次 ⌫ 清空輸入框，不送指令；Claude 工作中也一樣；滑鼠移上去浮出名稱', async ($, on) => {
+  const ran: string[] = []
+  const filled: string[] = []
+  buttons(on, ran)
+  on('prompt.fill', ($, e) => {
+    filled.push(e.text)
+    return { isFilled: true }
+  })
+
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({
+    plugin: 'statusbar',
+    surface: 'terminal',
+    component: 'PromptHint',
+    props: { ...HINT.props, isWorking: true },
+  })
+
+  await ui.press({ key: 'erase' })
+  expect(filled).toEqual([''])
+  expect(ran).toEqual([])
+  expect(await ui.find({ type: 'Button', key: 'erase', text: '⌫' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' clear input ' })).toBeDefined()
 })
 
 for (const [command, glyph] of [

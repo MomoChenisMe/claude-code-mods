@@ -100,6 +100,9 @@ const run = ($: EngineInterface, command: string) => $.command.run({ command })
 const CONTINUE_TEXT = '繼續工作'
 const continueWork = ($: EngineInterface) => $.prompt.submit({ text: CONTINUE_TEXT, asUser: true })
 
+// 清空輸入框。Claude 工作中按 Esc 會中斷這一輪而不是清掉打到一半的字，這顆鈕只清輸入框。
+const clearInput = ($: EngineInterface) => $.prompt.fill({ text: '' })
+
 // `/compact`、`/clear` 都會改掉整段對話，所以要按兩次：第一次只把鈕換成 `↓ compact?`、
 // `× clear?`，3 秒內再按同一顆才送出，否則恢復原狀；改按另一顆就換成等那一顆。
 // 比對指令與按下的時間，免得上一次的計時把新的一次提早收掉。
@@ -281,8 +284,8 @@ export const register: Register = on => {
       <Button key={command} label="▾" plain dimColor onPress={() => void run($, command)} />
     )
 
-    // ctx 旁的 ↓ compact（把對話壓下去）、→ 送出「繼續工作」、× clear（清掉）；compact
-    // 與 clear 會改掉整段對話，要按兩次。
+    // ctx 旁的 ↓ compact（把對話壓下去）、→ 送出「繼續工作」、× clear（清掉對話）、⌫ 清空輸入框；
+    // compact 與 clear 會改掉整段對話，要按兩次。
     const waiting = (await read($, armed))?.command ?? null
     const confirmButton = (command: Armed['command'], glyph: string) => (
       <Button
@@ -309,6 +312,15 @@ export const register: Register = on => {
         />
         <Text> </Text>
         {confirmButton('clear', '×')}
+        <Text> </Text>
+        <Button
+          key="erase"
+          label="⌫"
+          plain
+          dimColor
+          hover={{ scope: 'hint:erase' }}
+          onPress={() => void clearInput($)}
+        />
       </Box>
     )
 
@@ -352,10 +364,10 @@ export const register: Register = on => {
       </Box>
     )
 
-    // 滑鼠移到三顆鈕上，鈕的右邊浮出反白的名稱標籤，像工具提示一樣暫時蓋在 5h 那一欄上，
+    // 滑鼠移到四顆鈕上，鈕的右邊浮出反白的名稱標籤，像工具提示一樣暫時蓋在 5h 那一欄上，
     // 不推擠版面。後畫的元素蓋在先畫的上面，所以標籤放在整列最後、位置用前面的寬度算：
     // 寬版先是模型／effort 那一欄與 3 格間隔，ctx 列是「ctx 」、進度條、百分比膠囊；窄版的 ctx
-    // 列在模型下面那一列，只有放進標籤的膠囊。再空一格才是鈕。三個標籤補到一樣寬，每個都整個
+    // 列在模型下面那一列，只有放進標籤的膠囊。再空一格才是鈕。四個標籤補到一樣寬，每個都整個
     // 蓋住「5h」，不會露出半個字。有一顆在等確認時不浮出，免得和 `compact?` 疊在一起。
     const ctxPercent = u.contextPercent ?? 0
     const modelColumn = Math.max(modelName(u.model).length, u.effort?.length ?? 0) + 3 + 3
@@ -366,17 +378,18 @@ export const register: Register = on => {
       <Box
         position="absolute"
         top={isNarrow ? 1 : 0}
-        left={buttonsAt + 6}
+        left={buttonsAt + 8}
         display="none"
         hover={{ scope, display: 'flex' }}
       >
-        <Text inverse>{` ${text.padEnd(8)} `}</Text>
+        <Text inverse>{` ${text.padEnd(11)} `}</Text>
       </Box>
     )
     const hoverLabels = waiting === null && [
       hoverLabel('hint:compact', 'compact'),
       hoverLabel('hint:continue', 'continue'),
       hoverLabel('hint:clear', 'clear'),
+      hoverLabel('hint:erase', 'clear input'),
     ]
 
     // 用量的配對：短期的 ctx／5h 一列，每週的 7d／Fable 一列。終端機太窄時，5h、Fable

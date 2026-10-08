@@ -8,17 +8,18 @@ It adds two status rows under the Claude Code prompt (three in a narrow terminal
 
 ```
 ⏵⏵ auto mode on (shift+tab to cycle)
- Opus 5.5 ▾   ctx ▰▰▱▱▱▱▱▱▱▱  24%  ↓ → ×        5h    ▰▱▱▱▱▱▱▱  9%  ↻19:00
+ Opus 5.5 ▾   ctx ▰▰▱▱▱▱▱▱▱▱  24%  ↓ → × ⌫      5h    ▰▱▱▱▱▱▱▱  9%  ↻19:00
  xhigh ▾      7d  ▰▰▰▰▱▱▱▱▱▱  35%  ↻Sun 05:00   Fable ▰▱▱▱▱▱▱▱  17%  ↻Sun 05:00
 ```
 
 - **Model and effort**: pills. The model pill is gray. The effort pill has the color of its level: low green, medium yellow, high orange, xhigh and max red. A press on the ▾ after a pill does what `/model` or `/effort` typed in the prompt does: it opens the picker. The pills change at once after a pick.
-- **ctx**: how much of the context window the conversation uses. After a session starts, after `/clear` and after a compact, Claude Code has no figure until the model's first reply. Until then, the pill shows a local estimate: what the system prompt, the tools, the memory files and the conversation already use. The estimate sends no request and makes no model call. After the reply, the pill shows the real figure. A conversation brought back with `/resume` shows the real figure from its last reply. Three buttons follow the percentage after one space. When the mouse is on a button, a label with its name shows next to it in inverted colors; the label covers the 5h column until the mouse moves away:
+- **ctx**: how much of the context window the conversation uses. After a session starts, after `/clear` and after a compact, Claude Code has no figure until the model's first reply. Until then, the pill shows a local estimate: what the system prompt, the tools, the memory files and the conversation already use. The estimate sends no request and makes no model call. After the reply, the pill shows the real figure. A conversation brought back with `/resume` shows the real figure from its last reply. Four buttons follow the percentage after one space. When the mouse is on a button, a label with its name shows next to it in inverted colors; the label covers the 5h column until the mouse moves away:
   - `↓` does what `/compact` typed in the prompt does; while the model replies, it waits for the turn to end.
   - `→` does what typing `繼續工作` ("continue working" in Chinese) and Enter in the prompt does, on one press; while the model replies, it waits for the turn to end.
   - `×` does what `/clear` does.
+  - `⌫` clears the prompt box, on one press. While Claude works, Esc stops the turn and does not clear what you typed. This button clears only the prompt box, and the work goes on.
   - `↓` and `×` change the whole conversation, so each needs two presses, to prevent an accidental press: the first press changes it to `↓ compact?` or `× clear?`, and a second press on the same button within 3 seconds sends the command. Otherwise it changes back.
-- The glyphs split the work: `▾` opens a picker; `→` tells the model to go on; `↓` (press down) and `×` (clear away) act on the conversation.
+- The glyphs split the work: `▾` opens a picker; `→` tells the model to go on; `↓` (press down) and `×` (clear away) act on the conversation; `⌫` (erase) acts only on the prompt box.
 - **5h and 7d**: the 5-hour and weekly usage limits, followed by the reset time. Only subscription accounts have them.
 - **Fable**: the weekly Fable usage, followed by the reset time. It shows only when the account has a Fable limit.
 - Each bar has the color of its level: below 50% green, below 75% yellow, below 90% orange, else red. Each percentage pill has this background: below 50% blue, below 75% rose, else red.
@@ -34,7 +35,7 @@ The narrow layout needs about 49 columns. In a narrower terminal, the 5h and Fab
 ## Requirements
 
 - Claude Code 2.1.290 or later (tested on this version). The mod API is early access, so a Claude Code release can make an update of this mod necessary.
-- Mouse clicks on the buttons (`▾`, `↓`, `→`, `×`) need Claude Code's fullscreen layout (`"tui": "fullscreen"` in settings.json). Without it, a click on a button does nothing.
+- Mouse clicks on the buttons (`▾`, `↓`, `→`, `×`, `⌫`) need Claude Code's fullscreen layout (`"tui": "fullscreen"` in settings.json). Without it, a click on a button does nothing.
 
 ## Install
 
