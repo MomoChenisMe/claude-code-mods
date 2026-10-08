@@ -1,12 +1,12 @@
 // 一輪裡依序出現的列：模型寫的一段文字、畫在畫面上的思考內容（列 id 與內文指紋）、一次工具呼叫（tool_use id），
 // 或一輪進行中送進來的訊息（subagent 的回報、背景工作完成的通知；列 id）。
 // key 是 null：記下時還沒有內文。舊版記下的列沒有 key。agents：這次呼叫的工具全是 Agent；ask：全是問你的
-// 工具（AskUserQuestion、ExitPlanMode）。
+// 工具（AskUserQuestion、ExitPlanMode）。errors：出錯的呼叫數。at：記下的時間（epoch 毫秒），舊版記下的列沒有。
 export type Row =
-  | { kind: 'text'; id: string; key?: string | null }
-  | { kind: 'thought'; id: string; key: string }
-  | { kind: 'tools'; ids: string[]; agents?: true; ask?: true }
-  | { kind: 'note'; id: string }
+  | { kind: 'text'; id: string; key?: string | null; at?: number }
+  | { kind: 'thought'; id: string; key: string; at?: number }
+  | { kind: 'tools'; ids: string[]; agents?: true; ask?: true; errors?: number; at?: number }
+  | { kind: 'note'; id: string; at?: number }
 
 // 一個正在跑的工具呼叫，與它在標頭上的說明（「讀取 register.tsx」）。
 export type Step = { id: string; label: string }
@@ -17,24 +17,22 @@ export type Turn = {
   rows: Row[]
   // 這一輪花的時間；還在進行是 null。
   durationMs: number | null
-  // 出錯的工具呼叫數。
-  errors: number
-  // 正在跑的工具呼叫，與最近一個動作（最近開始的工具，或模型最近一段說明或思考的第一句，看哪個晚）；
+  // 正在跑的工具呼叫，與這一段過程最近一個動作（最近開始的工具，或最近一段思考的第一句，看哪個晚）；
   // 「處理中」標頭顯示它們。舊版記下的輪次沒有。
   running?: Step[]
   recent?: string
-  // 開始的時間（epoch 毫秒）；「處理中 12 秒」從這裡算。舊版記下的輪次沒有。
+  // 開始的時間（epoch 毫秒）；第一段過程的時間從這裡算。舊版記下的輪次沒有。
   startedAt?: number
 }
 
-// 「處理了 …」標頭：哪一輪、標籤、是否展開。
-export type Header = { turn: string; label: string; isOpen: boolean }
+// 一段過程的「處理了 …」標頭：哪一段（第一列的 id）、標籤、是否展開。
+export type Header = { group: string; label: string; isOpen: boolean }
 
-// 一列的畫法：輪次第一個工具列的「處理了 …」標頭、收起來的過程列，或回答（照原樣畫）。
-// 沒有過程列畫得出標頭時，標頭畫在第一段回答上面（header）。
+// 一列的畫法：一段過程的「處理了 …」標頭、收起來的過程列（屬於哪一段），或照原樣畫的列（模型寫的文字、
+// 問你的問題）。一段裡沒有列畫得出標頭時，標頭畫在緊接著的文字上面（header）。
 export type View =
   | ({ kind: 'header' } & Header)
-  | { kind: 'work'; isOpen: boolean }
+  | { kind: 'work'; group: string; isOpen: boolean }
   | { kind: 'answer'; header?: Header }
 
 // subagent 的類型、任務說明，與完成通知帶來的狀態和花費時間（還沒收到是 null）。

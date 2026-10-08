@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'claude-code/testing'
-import type { Engine } from 'claude-code/testing'
+import type { Engine, MockClock } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import type { Turn } from '../types'
@@ -10,129 +10,144 @@ import { addNote, addRow, describe, duration, endTurn, firstSentence, startTurn,
 const text = (t: string) => ({ type: 'text', text: t })
 const toolUse = (id: string) => ({ type: 'tool_use', id, name: 'Bash', input: {} })
 
-// 一輪：先說明、跑一個工具、出錯一次，最後回答。
+// 一輪：先說明、跑一個工具、出錯一次，最後回答。at 是各列記下的時間。
 const oneTurn = () => {
   let all = startTurn([], 't1', 0)
-  all = addRow(all, 'a1', 'assistant', [text('我先看一下檔案。')])
-  all = addRow(all, 'a2', 'assistant', [toolUse('tu1')])
-  all = addRow(all, 'u1', 'user', [{ type: 'tool_result', tool_use_id: 'tu1', is_error: true }])
-  all = addRow(all, 'a3', 'assistant', [text('做好了。')])
+  all = addRow(all, 'a1', 'assistant', [text('我先看一下檔案。')], 2_000)
+  all = addRow(all, 'a2', 'assistant', [toolUse('tu1')], 5_000)
+  all = addRow(all, 'u1', 'user', [{ type: 'tool_result', tool_use_id: 'tu1', is_error: true }], 9_000)
+  all = addRow(all, 'a3', 'assistant', [text('做好了。')], 50_000)
   return endTurn(all, 't1', 83_000)
 }
 
 const INTRO = textKey('我先看一下檔案。')!
 const DONE = textKey('做好了。')!
+const thinking = (t: string) => ({ type: 'thinking', thinking: t, signature: 'x' })
 
-test('依序記下一輪的列；最後一次工具呼叫之後的文字是回答，其餘是過程', () => {
+test('依序記下一輪的列；模型寫的文字都留著，夾在中間的工具收成一段「處理了」', () => {
   const all = oneTurn()
   expect(all).toEqual([
     {
       id: 't1',
       rows: [
-        { kind: 'text', id: 'a1', key: INTRO },
-        { kind: 'tools', ids: ['tu1'] },
-        { kind: 'text', id: 'a3', key: DONE },
+        { kind: 'text', id: 'a1', key: INTRO, at: 2_000 },
+        { kind: 'tools', ids: ['tu1'], at: 5_000, errors: 1 },
+        { kind: 'text', id: 'a3', key: DONE, at: 50_000 },
       ],
       durationMs: 83_000,
-      errors: 1,
       running: [],
-      recent: '做好了。',
+      recent: undefined,
       startedAt: 0,
     },
   ])
-  // 標頭在第一個工具列；文字列用 uuid 與內文指紋都查得到。
-  expect(views(all[0], false)).toEqual({
-    a1: { kind: 'work', isOpen: false },
-    [INTRO]: { kind: 'work', isOpen: false },
-    tu1: { kind: 'header', turn: 't1', label: '處理了 1 分 23 秒 · 1 個錯誤', isOpen: false },
+  // 標頭在這段的工具列，時間從前一段文字算到後一段文字；文字列用 uuid 與內文指紋都查得到。
+  expect(views(all[0]!, [])).toEqual({
+    a1: { kind: 'answer' },
+    [INTRO]: { kind: 'answer' },
+    tu1: { kind: 'header', group: 'tu1', label: '處理了 48 秒 · 1 個錯誤', isOpen: false },
     a3: { kind: 'answer' },
     [DONE]: { kind: 'answer' },
   })
   // 指紋不管空白；沒有內文就沒有指紋。
   expect(textKey('我先看一下\n檔案。 ')).toBe(INTRO)
   expect(textKey('  ')).toBe(null)
-  // 還在進行：最新的一段文字先當回答，等後面出現工具呼叫才收進過程。
-  const running = addRow(startTurn([], 't2', 0), 'b1', 'assistant', [text('我先跑測試。')])
-  expect(views(running[0], false)).toEqual({ b1: { kind: 'answer' }, [textKey('我先跑測試。')!]: { kind: 'answer' } })
-  const ran = addRow(running, 'b2', 'assistant', [toolUse('tu2')])
-  // 還在跑的工具寫在「處理中」後面。
-  expect(views(ran[0], false)['tu2']).toEqual({ kind: 'header', turn: 't2', label: '處理中 · 執行指令', isOpen: false })
-  // 展開時標頭移到第一列，展開的內容都在它下面。
-  expect(views(ran[0], true)).toEqual({
-    b1: { kind: 'header', turn: 't2', label: '處理中 · 執行指令', isOpen: true },
-    [textKey('我先跑測試。')!]: { kind: 'header', turn: 't2', label: '處理中 · 執行指令', isOpen: true },
-    tu2: { kind: 'work', isOpen: true },
+  // 還在進行：文字一出現就留著，後面的工具是正在跑的一段。
+  const running = addRow(startTurn([], 't2', 0), 'b1', 'assistant', [text('我先跑測試。')], 1_000)
+  expect(views(running[0]!, [])).toEqual({ b1: { kind: 'answer' }, [textKey('我先跑測試。')!]: { kind: 'answer' } })
+  const ran = addRow(running, 'b2', 'assistant', [toolUse('tu2')], 3_000)
+  expect(views(ran[0]!, [], 13_000)['tu2']).toEqual({ kind: 'header', group: 'tu2', label: '處理中 12 秒 · 執行指令', isOpen: false })
+  // 展開時標頭移到這段的第一列。
+  const busy = addRow(addRow(ran, 'b3', 'assistant', [thinking('rebase 有衝突。')], 4_000), 'b4', 'assistant', [toolUse('tu3')], 5_000)
+  expect(views(busy[0]!, ['tu2'])).toMatchObject({
+    tu2: { kind: 'header', group: 'tu2', isOpen: true },
+    b3: { kind: 'work', group: 'tu2', isOpen: true },
+    tu3: { kind: 'work', group: 'tu2', isOpen: true },
   })
-  // 畫在畫面上的思考也是過程；沒有工具的輪次，標頭放在第一段思考。空的思考不記。
-  const thinking = (t: string) => ({ type: 'thinking', thinking: t, signature: 'x' })
+  // 沒有工具的一段，標頭放在思考上。空的思考不記。
   let quiet = startTurn([], 't3', 0)
-  quiet = addRow(quiet, 'c0', 'assistant', [thinking('')])
-  quiet = addRow(quiet, 'c1', 'assistant', [thinking('先確認三個條件。')])
-  quiet = addRow(quiet, 'c2', 'assistant', [text('都通過了。')])
-  // 沒有工具在跑時，「處理中」後面是模型最近說的那一句。
-  expect(views(quiet[0], false)).toEqual({
-    c1: { kind: 'header', turn: 't3', label: '處理中 · 都通過了。', isOpen: false },
-    [textKey('先確認三個條件。')!]: { kind: 'header', turn: 't3', label: '處理中 · 都通過了。', isOpen: false },
+  quiet = addRow(quiet, 'c0', 'assistant', [thinking('')], 1_000)
+  quiet = addRow(quiet, 'c1', 'assistant', [thinking('先確認三個條件。')], 2_000)
+  quiet = addRow(quiet, 'c2', 'assistant', [text('都通過了。')], 6_000)
+  expect(views(quiet[0]!, [])).toEqual({
+    c1: { kind: 'header', group: 'c1', label: '處理了 6 秒', isOpen: false },
+    [textKey('先確認三個條件。')!]: { kind: 'header', group: 'c1', label: '處理了 6 秒', isOpen: false },
     c2: { kind: 'answer' },
     [textKey('都通過了。')!]: { kind: 'answer' },
   })
-  // 有工具時，工具之間的思考收起來，標頭仍在第一個工具列。
-  const busy = addRow(addRow(ran, 'b3', 'assistant', [thinking('rebase 有衝突。')]), 'b4', 'assistant', [text('停下來了。')])
-  expect(views(busy[0], false)['b3']).toEqual({ kind: 'work', isOpen: false })
-  expect(views(busy[0], false)['tu2']).toEqual({ kind: 'header', turn: 't2', label: '處理中 · 執行指令', isOpen: false })
-  expect(views(busy[0], false)['b4']).toEqual({ kind: 'answer' })
   // 輪次結束後才來的列（或沒有進行中的輪次）不記。
-  expect(addRow(all, 'a4', 'assistant', [text('late')])).toBe(all)
-  expect(addRow([], 'a5', 'assistant', [text('history')])).toEqual([])
+  expect(addRow(all, 'a4', 'assistant', [text('late')], 99_000)).toBe(all)
+  expect(addRow([], 'a5', 'assistant', [text('history')], 99_000)).toEqual([])
+})
+
+test('先寫訊息再做事：每段文字都留著，文字之間的每段過程各自一行、各自展開、各自計時', () => {
+  let all = startTurn([], 't1', 0)
+  all = addRow(all, 'a1', 'assistant', [toolUse('tu1')], 3_000)
+  all = addRow(all, 'u1', 'user', [{ type: 'tool_result', tool_use_id: 'tu1' }], 4_000)
+  all = addRow(all, 'a2', 'assistant', [text('要。建議統整成兩層：\n\n- theme.css 放值\n- TS 表只剩對照')], 20_000)
+  all = addRow(all, 'a3', 'assistant', [toolUse('tu2')], 25_000)
+  all = addRow(all, 'u2', 'user', [{ type: 'tool_result', tool_use_id: 'tu2', is_error: true }], 30_000)
+  all = addRow(all, 'a4', 'assistant', [text('第六輪已落檔。')], 63_000)
+  const done = endTurn(all, 't1', 70_000)[0]!
+  const shown = views(done, ['tu2'])
+  expect(shown['tu1']).toEqual({ kind: 'header', group: 'tu1', label: '處理了 20 秒', isOpen: false })
+  expect(shown['a2']).toEqual({ kind: 'answer' })
+  expect(shown['tu2']).toEqual({ kind: 'header', group: 'tu2', label: '處理了 43 秒 · 1 個錯誤', isOpen: true })
+  expect(shown['a4']).toEqual({ kind: 'answer' })
+  // 舊版記下、沒有時間的列：只有一段時用這一輪的時間，好幾段就不寫時間。
+  const legacy: Turn = { id: 't2', rows: [{ kind: 'tools', ids: ['x1'] }, { kind: 'text', id: 'y', key: 'k' }], durationMs: 9_000 }
+  expect(views(legacy, [])['x1']).toEqual({ kind: 'header', group: 'x1', label: '處理了 9 秒', isOpen: false })
+  const legacyTwo: Turn = { ...legacy, rows: [...legacy.rows, { kind: 'tools', ids: ['x2'] }] }
+  expect(views(legacyTwo, [])['x2']).toEqual({ kind: 'header', group: 'x2', label: '處理了', isOpen: false })
 })
 
 test('subagent：一輪進行中送進來的訊息是過程；同時開好幾個時，標頭不放在呼叫列', () => {
   const agent = (id: string) => ({ type: 'tool_use', id, name: 'Agent', input: { description: id } })
-  const thought = (t: string) => ({ type: 'thinking', thinking: t, signature: 'x' })
-  const work = { kind: 'work', isOpen: false }
   const answer = { kind: 'answer' }
 
   // 開一個 subagent，它的回報在這一輪進行中送進來，最後回答。
   let one = startTurn([], 't4', 0)
-  one = addRow(one, 'd1', 'assistant', [agent('ag1')])
-  one = addNote(one, 'n1')
-  one = addRow(one, 'd2', 'assistant', [text('它回報了。')])
-  expect(one[0].rows).toEqual([{ kind: 'tools', ids: ['ag1'], agents: true }, { kind: 'note', id: 'n1' }, { kind: 'text', id: 'd2', key: textKey('它回報了。') }])
-  expect(views(one[0], false)['ag1']).toEqual({ kind: 'header', turn: 't4', label: '處理中 · subagent：ag1', isOpen: false })
-  expect(views(one[0], false)['n1']).toEqual(work)
-  expect(views(one[0], false)['d2']).toEqual(answer)
+  one = addRow(one, 'd1', 'assistant', [agent('ag1')], 1_000)
+  one = addNote(one, 'n1', 2_000)
+  one = addRow(one, 'd2', 'assistant', [text('它回報了。')], 3_000)
+  expect(one[0]!.rows).toEqual([
+    { kind: 'tools', ids: ['ag1'], agents: true, at: 1_000 },
+    { kind: 'note', id: 'n1', at: 2_000 },
+    { kind: 'text', id: 'd2', key: textKey('它回報了。'), at: 3_000 },
+  ])
+  expect(views(one[0]!, [])['ag1']).toEqual({ kind: 'header', group: 'ag1', label: '處理了 3 秒', isOpen: false })
+  expect(views(one[0]!, [])['n1']).toEqual({ kind: 'work', group: 'ag1', isOpen: false })
+  expect(views(one[0]!, [])['d2']).toEqual(answer)
 
   // 同一則回覆開兩個：引擎把它們畫成自己的一列，標頭改放在思考。
   let two = startTurn([], 't5', 0)
-  two = addRow(two, 'e0', 'assistant', [thought('開兩個。')])
-  two = addRow(two, 'e1', 'assistant', [agent('ag2')])
-  two = addRow(two, 'e2', 'assistant', [agent('ag3')])
-  two = addRow(two, 'e3', 'assistant', [text('已開')])
-  expect(views(two[0], false)['e0']).toEqual({ kind: 'header', turn: 't5', label: '處理中 · subagent：ag2 等 2 項', isOpen: false })
-  expect(views(two[0], false)['ag2']).toEqual(work)
-  expect(views(two[0], false)['ag3']).toEqual(work)
-  expect(views(two[0], false)['e3']).toEqual(answer)
+  two = addRow(two, 'e0', 'assistant', [thinking('開兩個。')], 1_000)
+  two = addRow(two, 'e1', 'assistant', [agent('ag2')], 2_000)
+  two = addRow(two, 'e2', 'assistant', [agent('ag3')], 3_000)
+  two = addRow(two, 'e3', 'assistant', [text('已開')], 4_000)
+  expect(views(two[0]!, [])['e0']).toMatchObject({ kind: 'header', group: 'e0' })
+  expect(views(two[0]!, [])['ag2']).toEqual({ kind: 'work', group: 'e0', isOpen: false })
+  expect(views(two[0]!, [])['e3']).toEqual(answer)
 
-  // 沒有思考時，標頭畫在回答上面。
+  // 沒有思考時，標頭畫在緊接著的文字上面。
   let lead = startTurn([], 't7', 0)
-  lead = addRow(lead, 'g1', 'assistant', [agent('ag6')])
-  lead = addRow(lead, 'g2', 'assistant', [agent('ag7')])
-  lead = addRow(lead, 'g3', 'assistant', [text('已開')])
-  expect(views(lead[0], false)['ag6']).toEqual(work)
-  expect(views(lead[0], false)['g3']).toEqual({ kind: 'answer', header: { turn: 't7', label: '處理中 · subagent：ag6 等 2 項', isOpen: false } })
+  lead = addRow(lead, 'g1', 'assistant', [agent('ag6')], 1_000)
+  lead = addRow(lead, 'g2', 'assistant', [agent('ag7')], 2_000)
+  lead = addRow(lead, 'g3', 'assistant', [text('已開')], 7_000)
+  expect(views(lead[0]!, [])['ag6']).toEqual({ kind: 'work', group: 'ag6', isOpen: false })
+  expect(views(lead[0]!, [])['g3']).toEqual({ kind: 'answer', header: { group: 'ag6', label: '處理了 7 秒', isOpen: false } })
 
-  // 連回答也沒有：整輪照原樣，免得藏起來卻點不開。
+  // 後面也沒有文字：照原樣，免得藏起來卻點不開。
   let bare = startTurn([], 't6', 0)
-  bare = addRow(bare, 'f1', 'assistant', [agent('ag4'), agent('ag5')])
-  bare = addNote(bare, 'n2')
-  expect(views(bare[0], false)).toEqual({ ag4: answer, ag5: answer, n2: answer })
+  bare = addRow(bare, 'f1', 'assistant', [agent('ag4'), agent('ag5')], 1_000)
+  bare = addNote(bare, 'n2', 2_000)
+  expect(views(bare[0]!, [])).toEqual({ ag4: answer, ag5: answer, n2: answer })
 
   // 輪次結束後才來的訊息不記。
   const ended = endTurn(two, 't5', 7_000)
-  expect(addNote(ended, 'n3')).toBe(ended)
+  expect(addNote(ended, 'n3', 8_000)).toBe(ended)
 })
 
-test('「處理中」後面的動作：正在跑的工具，沒有工具在跑時是最近一個動作（工具或說明）', () => {
+test('「處理中」後面的動作：正在跑的工具，沒有工具在跑時是這段最近一個動作（工具或思考）', () => {
   expect(describe('Bash', { command: 'npm test\nnpm run lint', description: 'Run the tests' })).toBe('執行：Run the tests')
   expect(describe('Bash', { command: 'npm test\nnpm run lint' })).toBe('執行：npm test')
   expect(describe('Read', { file_path: '/repo/hooks/register.tsx' })).toBe('讀取 register.tsx')
@@ -146,29 +161,30 @@ test('「處理中」後面的動作：正在跑的工具，沒有工具在跑�
   expect(firstSentence('  ')).toBeUndefined()
 
   const read = (id: string, path: string) => ({ type: 'tool_use', id, name: 'Read', input: { file_path: path } })
-  const label = (all: ReturnType<typeof startTurn>) => (views(all[0], false)['r1'] as { label: string }).label
+  const label = (all: ReturnType<typeof startTurn>) => (views(all[0]!, [])['r1'] as { label: string }).label
   let all = startTurn([], 't1', 0)
-  all = addRow(all, 'a1', 'assistant', [text('先看兩個檔案。'), read('r1', '/repo/a.ts'), read('r2', '/repo/b.ts')])
+  all = addRow(all, 'a1', 'assistant', [text('先看兩個檔案。'), read('r1', '/repo/a.ts'), read('r2', '/repo/b.ts')], 1_000)
   expect(label(all)).toBe('處理中 · 讀取 a.ts 等 2 項')
-  all = addRow(all, 'u1', 'user', [{ type: 'tool_result', tool_use_id: 'r1' }])
+  all = addRow(all, 'u1', 'user', [{ type: 'tool_result', tool_use_id: 'r1' }], 2_000)
   expect(label(all)).toBe('處理中 · 讀取 b.ts')
   // 跑完了、模型還沒寫新的說明（思考內容也常是空的）：保留最近開始的那個工具。
-  all = addRow(all, 'u2', 'user', [{ type: 'tool_result', tool_use_id: 'r2' }])
+  all = addRow(all, 'u2', 'user', [{ type: 'tool_result', tool_use_id: 'r2' }], 3_000)
+  all = addRow(all, 'a2', 'assistant', [thinking('')], 4_000)
   expect(label(all)).toBe('處理中 · 讀取 b.ts')
-  all = addRow(all, 'a2', 'assistant', [{ type: 'thinking', thinking: '', signature: 'x' }])
-  expect(label(all)).toBe('處理中 · 讀取 b.ts')
-  all = addRow(all, 'a3', 'assistant', [text('兩個檔案都看完了。接著改。')])
+  all = addRow(all, 'a3', 'assistant', [thinking('兩個檔案都看完了。接著改。')], 5_000)
   expect(label(all)).toBe('處理中 · 兩個檔案都看完了。')
-  expect(label(endTurn(all, 't1', 5_000))).toBe('處理了 5 秒')
+  // 文字留在對話裡，這一段就結束了。
+  all = addRow(all, 'a4', 'assistant', [text('改好了。')], 9_000)
+  expect(label(all)).toBe('處理了 8 秒')
 })
 
 test('「處理中」後面寫已經過了多久；舊版記下、沒有開始時間的輪次不寫', () => {
-  const ran = addRow(startTurn([], 't1', 1_000), 'a1', 'assistant', [toolUse('tu1')])
-  const header = (turn: Turn, now: number) => (views(turn, false, now)['tu1'] as { label: string }).label
+  const ran = addRow(startTurn([], 't1', 1_000), 'a1', 'assistant', [toolUse('tu1')], 1_000)
+  const header = (turn: Turn, now: number) => (views(turn, [], now)['tu1'] as { label: string }).label
   expect(header(ran[0]!, 1_000)).toBe('處理中 1 秒 · 執行指令')
   expect(header(ran[0]!, 84_000)).toBe('處理中 1 分 23 秒 · 執行指令')
   // 沒有動作可寫時只寫時間。
-  const quiet: Turn = { id: 't2', rows: [{ kind: 'tools', ids: ['tu1'] }], durationMs: null, errors: 0, startedAt: 0 }
+  const quiet: Turn = { id: 't2', rows: [{ kind: 'tools', ids: ['tu1'] }], durationMs: null, startedAt: 0 }
   expect(header(quiet, 12_000)).toBe('處理中 12 秒')
   const { startedAt: _, ...legacy } = quiet
   expect(header(legacy, 12_000)).toBe('處理中…')
@@ -187,39 +203,28 @@ test('從原始內容取出回報的 subagent，與完成通知的狀態和時�
   expect(noticeOf(report)).toBe(null)
 })
 
-test('問你問題：AskUserQuestion 和它前面那段說明照原樣顯示，標頭寫「等你回答」', () => {
+test('問你問題：AskUserQuestion 不收進過程，前面的說明與後面的工作照一般規則', () => {
   const bash = (id: string) => ({ type: 'tool_use', id, name: 'Bash', input: { description: 'Check status' } })
   const ask = (id: string) => ({ type: 'tool_use', id, name: 'AskUserQuestion', input: { questions: [] } })
   const answer = { kind: 'answer' }
-  const plan = textKey('提交計畫如下。')!
 
   let all = startTurn([], 't1', 0)
-  all = addRow(all, 'a1', 'assistant', [bash('b1')])
-  all = addRow(all, 'u1', 'user', [{ type: 'tool_result', tool_use_id: 'b1' }])
-  all = addRow(all, 'a2', 'assistant', [{ type: 'thinking', thinking: '我整理了提交計畫。', signature: 'x' }])
-  all = addRow(all, 'a3', 'assistant', [text('提交計畫如下。')])
-  all = addRow(all, 'a4', 'assistant', [ask('q1')])
-  expect(all[0].rows.at(-1)).toEqual({ kind: 'tools', ids: ['q1'], ask: true })
-  // 等你回答時：說明與問題都看得到，標頭寫「等你回答」。
-  const waiting = views(all[0], false)
-  expect(waiting['b1']).toEqual({ kind: 'header', turn: 't1', label: '處理中 · 等你回答', isOpen: false })
-  expect(waiting['a3']).toEqual(answer)
-  expect(waiting[plan]).toEqual(answer)
-  // 引擎有時把寫給你的話畫成掛在思考上的摘要列，所以緊接在問題前的思考也留著。
+  all = addRow(all, 'a1', 'assistant', [bash('b1')], 1_000)
+  all = addRow(all, 'u1', 'user', [{ type: 'tool_result', tool_use_id: 'b1' }], 2_000)
+  all = addRow(all, 'a2', 'assistant', [text('提交計畫如下。')], 5_000)
+  all = addRow(all, 'a3', 'assistant', [ask('q1')], 6_000)
+  expect(all[0]!.rows.at(-1)).toEqual({ kind: 'tools', ids: ['q1'], ask: true, at: 6_000 })
+  const waiting = views(all[0]!, [])
+  expect(waiting['b1']).toEqual({ kind: 'header', group: 'b1', label: '處理了 5 秒', isOpen: false })
   expect(waiting['a2']).toEqual(answer)
   expect(waiting['q1']).toEqual(answer)
-
-  // 你回答後模型繼續工作：問答仍留在對話裡，後面的工作收進過程。
-  all = addRow(all, 'u2', 'user', [{ type: 'tool_result', tool_use_id: 'q1' }])
-  all = addRow(all, 'a5', 'assistant', [bash('b2')])
-  all = addRow(all, 'u3', 'user', [{ type: 'tool_result', tool_use_id: 'b2' }])
-  all = addRow(all, 'a6', 'assistant', [text('提交好了。')])
-  const done = views(endTurn(all, 't1', 30_000)[0], false)
-  expect(done['b1']).toEqual({ kind: 'header', turn: 't1', label: '處理了 30 秒', isOpen: false })
-  expect(done['a3']).toEqual(answer)
-  expect(done['q1']).toEqual(answer)
-  expect(done['b2']).toEqual({ kind: 'work', isOpen: false })
-  expect(done['a6']).toEqual(answer)
+  // 問題直接接在工具後面時，問題也把過程切開。
+  all = addRow(all, 'u2', 'user', [{ type: 'tool_result', tool_use_id: 'q1' }], 20_000)
+  all = addRow(all, 'a4', 'assistant', [bash('b2')], 22_000)
+  all = addRow(all, 'a5', 'assistant', [ask('q2')], 25_000)
+  const asked = views(all[0]!, [])
+  expect(asked['b2']).toEqual({ kind: 'header', group: 'b2', label: '處理了 19 秒', isOpen: false })
+  expect(asked['q2']).toEqual(answer)
 })
 
 test('時間的格式', () => {
@@ -231,9 +236,9 @@ test('時間的格式', () => {
 
 const ROW = { onScreen: null }
 
-// 用 mod 自己聽的事件把同一輪餵進去。測試裡沒辦法替 session.append 墊底，那一步在 mod
+// 用 mod 自己聽的事件把同一輪餵進去，各列之間讓時鐘往前走。測試裡沒辦法替 session.append 墊底，那一步在 mod
 // 記完帳之後才失敗，所以吞掉它的錯誤。
-const seed = async ($: Engine, on: On) => {
+const seed = async ($: Engine, on: On, clock: MockClock) => {
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('turn.complete', () => ({ text: '' }))
   const append = (uuid: string, type: string, content: unknown[]) =>
@@ -243,15 +248,19 @@ const seed = async ($: Engine, on: On) => {
   // 測試引擎的型別只列出 turn.abort，turn.start／turn.complete 實際上叫得到。
   const turn = $.turn as unknown as { start: (e: unknown) => Promise<unknown>; complete: (e: unknown) => Promise<unknown> }
   await turn.start({ text: '整理一下', turnId: 't1' })
+  await clock.advance(2_000)
   await append('a1', 'assistant', [text('我先看一下檔案。')])
+  await clock.advance(3_000)
   await append('a2', 'assistant', [toolUse('tu1')])
+  await clock.advance(4_000)
   await append('u1', 'user', [{ type: 'tool_result', tool_use_id: 'tu1', is_error: true }])
+  await clock.advance(76_000)
   await append('a3', 'assistant', [text('做好了。')])
   await turn.complete({ turnId: 't1', durationMs: 83_000, answer: '做好了。', isAborted: false, reason: 'completed' })
 }
 
-test('過程收成一行「› 處理了」，按下去展開；回答開頭標上「✻」', async ($, on) => {
-  mock.clock(on)
+test('過程收成一行「› 處理了」，按下去展開；文字開頭標上「✻」', async ($, on) => {
+  const clock = mock.clock(on)
   on('ui.render', { component: 'AssistantMessage' }, ($, e) => {
     const { Text } = $.ui.resolve(e)
     return <Text>{`● ${e.props.text}`}</Text>
@@ -264,7 +273,7 @@ test('過程收成一行「› 處理了」，按下去展開；回答開頭標�
     const { Text } = $.ui.resolve(e)
     return <Text>{e.props.hint}</Text>
   })
-  await seed($, on)
+  await seed($, on, clock)
 
   const intro = await $.ui.mount({
     plugin: 'tidy',
@@ -273,8 +282,10 @@ test('過程收成一行「› 處理了」，按下去展開；回答開頭標�
     requestId: 'a1',
     props: { text: '我先看一下檔案。', isFirstOfReply: true, ...ROW },
   })
-  expect(await intro.find({ type: 'Text', text: /我先看一下/ })).toBeUndefined()
-  // 畫面給的列 id 對不上 uuid 時，用內文指紋認出同一段過程文字。
+  // 工具前面的說明也留在對話裡，開頭標上「✻」。
+  expect(await intro.find({ type: 'Markdown' })).toBeDefined()
+  expect(await intro.find({ type: 'Text', text: '✻' })).toBeDefined()
+  // 畫面給的列 id 對不上 uuid 時，用內文指紋認出同一段文字。
   const stray = await $.ui.mount({
     plugin: 'tidy',
     surface: 'terminal',
@@ -282,7 +293,7 @@ test('過程收成一行「› 處理了」，按下去展開；回答開頭標�
     requestId: 'not-the-uuid',
     props: { text: '我先看一下檔案。\n', isFirstOfReply: true, ...ROW },
   })
-  expect(await stray.find({ type: 'Text', text: /我先看一下/ })).toBeUndefined()
+  expect(await stray.find({ type: 'Text', text: '✻' })).toBeDefined()
 
   const tools = await $.ui.mount({
     plugin: 'tidy',
@@ -295,7 +306,7 @@ test('過程收成一行「› 處理了」，按下去展開；回答開頭標�
       ...ROW,
     },
   })
-  expect(await tools.find({ type: 'Button', key: 'turn:t1', text: '› 處理了 1 分 23 秒 · 1 個錯誤' })).toBeDefined()
+  expect(await tools.find({ type: 'Button', key: 'group:tu1', text: '› 處理了 1 分 23 秒 · 1 個錯誤' })).toBeDefined()
   expect(await tools.find({ type: 'Text', text: 'Ran 1 shell command' })).toBeUndefined()
 
   // 執行中工具下方的「ctrl+b 放到背景」提示也跟著收起來。
@@ -318,10 +329,8 @@ test('過程收成一行「› 處理了」，按下去展開；回答開頭標�
   expect(await answer.find({ type: 'Text', text: '✻' })).toBeDefined()
   expect(await answer.find({ type: 'Text', text: /●/ })).toBeUndefined()
 
-  await tools.press({ key: 'turn:t1' })
-  expect(await intro.find({ type: 'Button', key: 'turn:t1', text: '⌄ 處理了 1 分 23 秒 · 1 個錯誤' })).toBeDefined()
-  expect(await intro.find({ type: 'Text', text: '● 我先看一下檔案。' })).toBeDefined()
-  expect(await tools.find({ type: 'Button', key: 'turn:t1' })).toBeUndefined()
+  await tools.press({ key: 'group:tu1' })
+  expect(await tools.find({ type: 'Button', key: 'group:tu1', text: '⌄ 處理了 1 分 23 秒 · 1 個錯誤' })).toBeDefined()
   expect(await tools.find({ type: 'Text', text: 'Ran 1 shell command' })).toBeDefined()
   expect(await hint.find({ type: 'Text', text: /ctrl\+b/ })).toBeDefined()
 })
@@ -393,13 +402,13 @@ test('subagent 的回報與完成通知收進「› 處理了」；你的訊息�
     component: 'ToolUse',
     props: { tool_use_id: 'ag1', tool: 'Agent', input: {}, isRunning: false, isErrored: false, isInterrupted: false, ...ROW },
   })
-  await call.press({ key: 'turn:t1' })
+  await call.press({ key: 'group:ag1' })
   expect(await peer.find({ type: 'Text', text: 'msg ok' })).toBeDefined()
   expect(await done.find({ type: 'Text', text: /finished/ })).toBeDefined()
 })
 
 test('同時開好幾個 subagent 的一輪，「› 處理了」畫在回答上面，之後的完成通知收在它底下', async ($, on) => {
-  mock.clock(on)
+  const clock = mock.clock(on)
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('turn.complete', () => ({ text: '' }))
   on('ui.render', { component: 'AssistantMessage' }, ($, e) => {
@@ -416,6 +425,7 @@ test('同時開好幾個 subagent 的一輪，「› 處理了」畫在回答上
   await turn.start({ text: '開兩個 subagent', turnId: 't1' })
   await append('a1', 'response', 'assistant', [{ type: 'tool_use', id: 'ag1', name: 'Agent', input: {} }])
   await append('a2', 'response', 'assistant', [{ type: 'tool_use', id: 'ag2', name: 'Agent', input: {} }])
+  await clock.advance(7_000)
   await append('a3', 'response', 'assistant', [text('已開')])
   await turn.complete({ turnId: 't1', durationMs: 7_000, answer: '已開', isAborted: false, reason: 'completed' })
 
@@ -426,7 +436,7 @@ test('同時開好幾個 subagent 的一輪，「› 處理了」畫在回答上
     requestId: 'a3',
     props: { text: '已開', isFirstOfReply: true, ...ROW },
   })
-  expect(await answer.find({ type: 'Button', key: 'turn:t1', text: '› 處理了 7 秒' })).toBeDefined()
+  expect(await answer.find({ type: 'Button', key: 'group:ag1', text: '› 處理了 7 秒' })).toBeDefined()
   expect(await answer.find({ type: 'Text', text: '✻' })).toBeDefined()
 
   const done = await $.ui.mount({
@@ -443,8 +453,8 @@ test('同時開好幾個 subagent 的一輪，「› 處理了」畫在回答上
     } as never,
   })
   expect(await done.find({ type: 'Text', text: /finished/ })).toBeUndefined()
-  await answer.press({ key: 'turn:t1' })
-  expect(await answer.find({ type: 'Button', key: 'turn:t1', text: '⌄ 處理了 7 秒' })).toBeDefined()
+  await answer.press({ key: 'group:ag1' })
+  expect(await answer.find({ type: 'Button', key: 'group:ag1', text: '⌄ 處理了 7 秒' })).toBeDefined()
   expect(await done.find({ type: 'Text', text: /finished/ })).toBeDefined()
 })
 
@@ -518,14 +528,91 @@ test('「處理中」後面的時間每秒往前走；這一輪結束就換成�
       ...ROW,
     },
   })
-  expect(await tools.find({ type: 'Button', key: 'turn:t1', text: '› 處理中 1 秒 · 執行指令' })).toBeDefined()
+  expect(await tools.find({ type: 'Button', key: 'group:tu1', text: '› 處理中 1 秒 · 執行指令' })).toBeDefined()
   await clock.advance(3_000)
-  expect(await tools.find({ type: 'Button', key: 'turn:t1', text: '› 處理中 3 秒 · 執行指令' })).toBeDefined()
+  expect(await tools.find({ type: 'Button', key: 'group:tu1', text: '› 處理中 3 秒 · 執行指令' })).toBeDefined()
   await clock.advance(62_000)
-  expect(await tools.find({ type: 'Button', key: 'turn:t1', text: '› 處理中 1 分 5 秒 · 執行指令' })).toBeDefined()
+  expect(await tools.find({ type: 'Button', key: 'group:tu1', text: '› 處理中 1 分 5 秒 · 執行指令' })).toBeDefined()
 
   await turn.complete({ turnId: 't1', durationMs: 65_000, answer: '', isAborted: false, reason: 'completed' })
-  expect(await tools.find({ type: 'Button', key: 'turn:t1', text: '› 處理了 1 分 5 秒' })).toBeDefined()
+  expect(await tools.find({ type: 'Button', key: 'group:tu1', text: '› 處理了 1 分 5 秒' })).toBeDefined()
   await clock.advance(5_000)
-  expect(await tools.find({ type: 'Button', key: 'turn:t1', text: '› 處理了 1 分 5 秒' })).toBeDefined()
+  expect(await tools.find({ type: 'Button', key: 'group:tu1', text: '› 處理了 1 分 5 秒' })).toBeDefined()
+})
+
+const BAND = {
+  component: 'AbovePrompt',
+  props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 100, scroll: { offset: 0, bodyRows: 9 }, view: {} },
+} as const
+
+test('展開的一段捲到標頭看不見、內容還在畫面上時，輸入框上方出現浮動列；按「⌃ 收起」就收起', async ($, on) => {
+  const clock = mock.clock(on)
+  on('ui.render', { component: 'ToolGroup' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>Ran 1 shell command</Text>
+  })
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text>技能列</Text>
+  })
+  await seed($, on, clock)
+  const props = (onScreen: { first: number; last: number; of: number } | null) => ({
+    calls: [{ tool_use_id: 'tu1', tool: 'Bash', input: {}, isRunning: false, isErrored: true, isInterrupted: false }],
+    isActive: false,
+    isExpanded: false,
+    onScreen,
+  })
+  const tools = await $.ui.mount({ plugin: 'tidy', surface: 'terminal', component: 'ToolGroup', requestId: 'row1', props: props({ first: 0, last: 2, of: 3 }) })
+  const band = await $.ui.mount({ plugin: 'tidy', surface: 'terminal', ...BAND })
+  expect(await band.find({ type: 'Text', text: '技能列' })).toBeDefined()
+  expect(await band.find({ type: 'Button', key: 'unstick' })).toBeUndefined()
+
+  // 展開後往下捲：標頭那一列捲掉了，內容還在。
+  await tools.press({ key: 'group:tu1' })
+  await tools.redraw(props({ first: 6, last: 30, of: 40 }))
+  expect(await band.find({ type: 'Text', text: '⌄ 處理了 1 分 23 秒 · 1 個錯誤 · ' })).toBeDefined()
+  expect(await band.find({ type: 'Button', key: 'unstick', text: '⌃ 收起' })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: '技能列' })).toBeDefined()
+
+  // 捲回去看得到標頭：浮動列消失。
+  await tools.redraw(props({ first: 1, last: 30, of: 40 }))
+  expect(await band.find({ type: 'Button', key: 'unstick' })).toBeUndefined()
+
+  await tools.redraw(props({ first: 6, last: 30, of: 40 }))
+  await band.press({ key: 'unstick' })
+  expect(await tools.find({ type: 'Button', key: 'group:tu1', text: '› 處理了 1 分 23 秒 · 1 個錯誤' })).toBeDefined()
+  expect(await band.find({ type: 'Button', key: 'unstick' })).toBeUndefined()
+
+  // 整段捲出畫面：不畫。
+  await tools.press({ key: 'group:tu1' })
+  await tools.redraw(props(null))
+  expect(await band.find({ type: 'Button', key: 'unstick' })).toBeUndefined()
+})
+
+test('模型文字的摘要列（isSummary）也留著；它在一段過程的開頭時，標頭畫在它上面', async ($, on) => {
+  const clock = mock.clock(on)
+  on('turn.start', ($, e) => ({ turnId: e.turnId }))
+  on('turn.complete', () => ({ text: '' }))
+  const turn = $.turn as unknown as { start: (e: unknown) => Promise<unknown>; complete: (e: unknown) => Promise<unknown> }
+  await turn.start({ text: '要不要統整', turnId: 't1' })
+  await clock.advance(1_000)
+  await $.session
+    .append({ uuid: 'k1', door: 'response', message: { type: 'assistant', content: [thinking('要，建議統整成兩層。')] } } as never)
+    .catch(() => undefined)
+  await clock.advance(4_000)
+  await $.session
+    .append({ uuid: 'k2', door: 'response', message: { type: 'assistant', content: [text('要寫入嗎？')] } } as never)
+    .catch(() => undefined)
+  await turn.complete({ turnId: 't1', durationMs: 6_000, answer: '', isAborted: false, reason: 'completed' })
+
+  const summary = await $.ui.mount({
+    plugin: 'tidy',
+    surface: 'terminal',
+    component: 'AssistantMessage',
+    requestId: 'k1',
+    props: { text: '要。建議統整成「值只在一處」。', isFirstOfReply: true, isSummary: true, ...ROW },
+  })
+  expect(await summary.find({ type: 'Button', key: 'group:k1', text: '› 處理了 5 秒' })).toBeDefined()
+  expect(await summary.find({ type: 'Markdown' })).toBeDefined()
+  expect(await summary.find({ type: 'Text', text: '✻' })).toBeDefined()
 })

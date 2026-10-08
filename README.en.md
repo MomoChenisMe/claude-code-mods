@@ -9,7 +9,7 @@ My mods for Claude Code. This repository is a Claude Code marketplace. It is not
 | Mod | What it does |
 | --- | --- |
 | [statusbar](statusbar/README.en.md) | Status rows under the prompt: model, effort, and context, 5-hour, 7-day and Fable usage |
-| [tidy](tidy/README.en.md) | Folds each turn's tool calls and thinking into one line, keeping your message and the final answer |
+| [tidy](tidy/README.en.md) | Keeps everything Claude writes, and folds each stretch of tool calls and thinking between texts into one line |
 
 ### statusbar
 
@@ -19,9 +19,9 @@ The two rows under the prompt: the model and effort on the left, and the context
 
 ### tidy
 
-The `› 處理了 15 秒` line ("worked for 15 seconds") in the middle is the folded work; a click opens it. The text marked with `✻` below it is the final answer.
+The texts marked with `✻` are what Claude writes (its plan first, its answer last). The `› 處理了 9 秒` line ("worked for 9 seconds") between them is the folded work; a click opens it.
 
-![tidy screenshot: your message, the folded "› 處理了 15 秒" line, and the final answer marked with ✻](tidy/docs/collapsed.png)
+![tidy screenshot: Claude writes its plan first, the work after it folds into the "› 處理了 9 秒" line, and the answer stays below](tidy/docs/collapsed.png)
 
 ## Install
 

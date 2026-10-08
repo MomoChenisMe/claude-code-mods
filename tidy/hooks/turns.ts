@@ -6,20 +6,21 @@ const KEEP = 200
 type Block = { readonly type: string; readonly [field: string]: unknown }
 
 export const startTurn = (turns: Turn[], id: string, startedAt: number): Turn[] =>
-  [...turns, { id, rows: [], durationMs: null, errors: 0, startedAt }].slice(-KEEP)
+  [...turns, { id, rows: [], durationMs: null, startedAt }].slice(-KEEP)
 
 export const endTurn = (turns: Turn[], id: string, durationMs: number): Turn[] =>
   turns.map(t => (t.id === id ? { ...t, durationMs } : t))
 
-// 把主對話新記下的一列併進進行中的那一輪：模型的思考與文字、工具呼叫，與工具結果（出錯的計數，
-// 跑完的從「正在跑」拿掉）。沒有進行中的輪次（歷史列、mod 載入前）就不動，回傳原本的表。
-export const addRow = (turns: Turn[], uuid: string, type: string, content: readonly Block[]): Turn[] => {
+// 把主對話新記下的一列併進進行中的那一輪：模型的思考與文字、工具呼叫，與工具結果（出錯的記在那次呼叫上，
+// 跑完的從「正在跑」拿掉）。at 是記下的時間，用來算每段過程花多久。沒有進行中的輪次（歷史列、mod 載入前）
+// 就不動，回傳原本的表。
+export const addRow = (turns: Turn[], uuid: string, type: string, content: readonly Block[], at: number): Turn[] => {
   const current = turns.at(-1)
   if (current === undefined || current.durationMs !== null) {
     return turns
   }
-  const rows: Row[] = []
-  let errors = 0
+  let rows = current.rows
+  const added: Row[] = []
   let running = current.running ?? []
   let recent = current.recent
   if (type === 'assistant') {
@@ -27,22 +28,23 @@ export const addRow = (turns: Turn[], uuid: string, type: string, content: reado
     const thinking = content.filter(b => b.type === 'thinking' && typeof b.thinking === 'string').map(b => b.thinking as string).join('')
     const thought = textKey(thinking)
     if (thought !== null) {
-      rows.push({ kind: 'thought', id: uuid, key: thought })
+      added.push({ kind: 'thought', id: uuid, key: thought, at })
     }
     const texts = content.filter(b => b.type === 'text' && typeof b.text === 'string').map(b => b.text as string)
     if (texts.length > 0) {
-      rows.push({ kind: 'text', id: uuid, key: textKey(texts.join('')) })
+      added.push({ kind: 'text', id: uuid, key: textKey(texts.join('')), at })
     }
-    recent = firstSentence(texts.join('\n')) ?? firstSentence(thinking) ?? recent
+    // 文字留在對話裡，結束了這一段過程；下一段的動作從頭記。
+    recent = texts.length > 0 ? undefined : (firstSentence(thinking) ?? recent)
     const calls = content.filter(b => b.type === 'tool_use' && typeof b.id === 'string')
     if (calls.length > 0) {
       const ids = calls.map(b => b.id as string)
-      rows.push(
+      added.push(
         calls.every(b => b.name === 'Agent')
-          ? { kind: 'tools', ids, agents: true }
+          ? { kind: 'tools', ids, agents: true, at }
           : calls.every(b => ASKS.includes(String(b.name)))
-            ? { kind: 'tools', ids, ask: true }
-            : { kind: 'tools', ids },
+            ? { kind: 'tools', ids, ask: true, at }
+            : { kind: 'tools', ids, at },
       )
       const steps = calls.map(b => ({ id: b.id as string, label: describe(String(b.name), (b.input ?? {}) as Record<string, unknown>) }))
       running = [...running, ...steps]
@@ -50,16 +52,23 @@ export const addRow = (turns: Turn[], uuid: string, type: string, content: reado
     }
   } else if (type === 'user') {
     const results = content.filter(b => b.type === 'tool_result')
-    errors = results.filter(b => b.is_error === true).length
+    const failed = results.filter(b => b.is_error === true).map(b => b.tool_use_id)
+    if (failed.length > 0) {
+      rows = rows.map(r =>
+        r.kind === 'tools' && r.ids.some(id => failed.includes(id))
+          ? { ...r, errors: (r.errors ?? 0) + r.ids.filter(id => failed.includes(id)).length }
+          : r,
+      )
+    }
     running = running.filter(step => !results.some(b => b.tool_use_id === step.id))
   }
-  if (rows.length === 0 && errors === 0 && running === (current.running ?? []) && recent === current.recent) {
+  if (added.length === 0 && rows === current.rows && running === (current.running ?? []) && recent === current.recent) {
     return turns
   }
-  return [...turns.slice(0, -1), { ...current, rows: [...current.rows, ...rows], errors: current.errors + errors, running, recent }]
+  return [...turns.slice(0, -1), { ...current, rows: [...rows, ...added], running, recent }]
 }
 
-// 問你問題的工具：它和它前面那段說明是對話，不是過程。
+// 問你問題的工具：它是對話，不是過程。
 const ASKS = ['AskUserQuestion', 'ExitPlanMode']
 
 // 工具在標頭上的說明：動詞，與要顯示的那個參數（路徑只留檔名）。
@@ -114,12 +123,12 @@ const doing = (turn: Turn) => {
 }
 
 // 一輪進行中送進來的訊息（subagent 的回報、背景工作完成的通知）也是過程。沒有進行中的輪次就不動。
-export const addNote = (turns: Turn[], uuid: string): Turn[] => {
+export const addNote = (turns: Turn[], uuid: string, at: number): Turn[] => {
   const current = turns.at(-1)
   if (current === undefined || current.durationMs !== null) {
     return turns
   }
-  return [...turns.slice(0, -1), { ...current, rows: [...current.rows, { kind: 'note', id: uuid }] }]
+  return [...turns.slice(0, -1), { ...current, rows: [...current.rows, { kind: 'note', id: uuid, at }] }]
 }
 
 // 文字的指紋：去掉空白後的 FNV-1a 雜湊。畫面給的列 id 對不上 uuid 時，用內文找回同一列。
@@ -132,65 +141,88 @@ export const textKey = (text: string) => {
   return bare === '' ? null : `text:${hash.toString(16)}`
 }
 
-// 一輪裡每一列該怎麼畫，以列 id（文字與思考列的 uuid 與指紋、工具呼叫的 tool_use id、訊息列的 uuid）查。
-// 「過程」是工具呼叫、思考、送進來的訊息，以及後面還有工具或思考的文字。收起來時第一個工具列（沒有工具
-// 就是第一段思考）畫「處理了 …」，其餘藏起來：工具列一定畫得出來，文字列在有些 session 對不上。展開時
-// 標頭移到這一輪的第一列過程，展開的內容才會都在標頭下面。最後一段工具或思考之後的文字是回答。
-// 沒有過程列畫得出標頭時（例如這一輪只有一起開的 subagent），標頭畫在第一段回答上面；連回答也沒有
-// 就整輪照原樣，免得過程藏起來卻點不開。now 是現在的時間，「處理中」後面寫已經過了多久。
-export const views = (turn: Turn, isOpen: boolean, now?: number): Record<string, View> => {
-  const errors = turn.errors > 0 ? ` · ${turn.errors} 個錯誤` : ''
-  const action = doing(turn)
-  const elapsed = now === undefined || turn.startedAt === undefined ? '' : ` ${duration(now - turn.startedAt)}`
-  const label =
-    turn.durationMs !== null
-      ? `處理了 ${duration(turn.durationMs)}${errors}`
-      : action === undefined
-        ? `處理中${elapsed === '' ? '…' : elapsed}`
-        : `處理中${elapsed} · ${action}`
+// 一段過程：連在一起的工具呼叫、思考與送進來的訊息。模型寫的文字與問你問題的工具不算，它們把過程切成好幾段。
+const isWork = (row: Row) => row.kind === 'note' || row.kind === 'thought' || (row.kind === 'tools' && row.ask !== true)
+
+// 一段過程以它第一列的 id 記：展開哪幾段、標頭按鈕的 key 都用它。
+export const groupOf = (row: Row) => (row.kind === 'tools' ? row.ids[0]! : row.id)
+
+const idsOf = (row: Row) =>
+  row.kind === 'tools' ? row.ids : row.kind === 'note' ? [row.id] : [row.id, row.key ?? null].filter(id => id !== null)
+
+// 一段過程的標頭：做完的「處理了 1 分 23 秒 · 1 個錯誤」，還在進行的「處理中 12 秒 · 執行：…」。時間從前一段文字
+// （第一段從這一輪開始）算到後一段文字（最後一段算到這一輪結束或現在）。舊版記下的列沒有時間，只有一段時用
+// 這一輪的時間，否則不寫時間。
+const labelOf = (turn: Turn, start: number, end: number, count: number, now?: number) => {
   const { rows } = turn
-  const kinds = rows.map(r => r.kind)
-  // 問你問題的工具列，與緊接在它前面的說明：照原樣顯示，不收進過程。說明可能是文字列，也可能是思考列
-  // （引擎有時把模型寫給你的話畫成掛在思考上的摘要列）。
-  const isAsk = (row: Row | undefined) => row?.kind === 'tools' && row.ask === true
-  const asking = new Set<number>()
+  const isLast = end === rows.length - 1
+  const from = start === 0 ? turn.startedAt : rows[start - 1]!.at
+  const until = !isLast
+    ? rows[end + 1]!.at
+    : turn.durationMs === null
+      ? now
+      : turn.startedAt === undefined
+        ? undefined
+        : turn.startedAt + turn.durationMs
+  const ms = from !== undefined && until !== undefined ? until - from : count === 1 && turn.durationMs !== null ? turn.durationMs : undefined
+  const time = ms === undefined ? '' : ` ${duration(ms)}`
+  if (turn.durationMs === null && isLast) {
+    const action = doing(turn)
+    return action === undefined ? `處理中${time === '' ? '…' : time}` : `處理中${time} · ${action}`
+  }
+  const errors = rows.slice(start, end + 1).reduce((n, r) => n + (r.kind === 'tools' ? (r.errors ?? 0) : 0), 0)
+  return `處理了${time}${errors > 0 ? ` · ${errors} 個錯誤` : ''}`
+}
+
+// 一輪裡每一列該怎麼畫，以列 id（文字與思考列的 uuid 與指紋、工具呼叫的 tool_use id、訊息列的 uuid）查。
+// 模型寫的文字都留在對話裡；夾在文字之間的每一段過程收成一行「› 處理了 …」，各段各自展開。收起來時標頭畫在這段
+// 的第一個工具列（沒有工具就是第一段思考）：工具列一定畫得出來。展開時標頭移到這段的第一列，展開的內容才會都在
+// 標頭下面。一段裡沒有列畫得出標頭時（例如只有一起開的 subagent），標頭畫在緊接著的文字上面；後面也沒有文字就
+// 照原樣，免得過程藏起來卻點不開。expanded 是展開中的段，now 是現在的時間。
+export const views = (turn: Turn, expanded: readonly string[], now?: number): Record<string, View> => {
+  const { rows } = turn
+  const spans: { start: number; end: number }[] = []
   rows.forEach((row, index) => {
-    if (isAsk(row)) {
-      asking.add(index)
-      for (let k = index - 1; k >= 0 && (kinds[k] === 'thought' || kinds[k] === 'text'); k--) {
-        asking.add(k)
+    if (isWork(row)) {
+      const last = spans.at(-1)
+      if (last !== undefined && last.end === index - 1) {
+        last.end = index
+      } else {
+        spans.push({ start: index, end: index })
       }
     }
   })
-  const lastWork = rows.reduce((last, row, index) => ((row.kind === 'thought' || row.kind === 'tools') && !isAsk(row) ? index : last), -1)
-  const isWork = (index: number) => kinds[index] === 'note' || (index <= lastWork && !asking.has(index))
-  // 同一則回覆開好幾個 subagent 時，引擎把這些呼叫畫成自己的一列「N background agents
-  // launched」，mod 畫不到；訊息列也不一定收合（只收 subagent 與背景工作的）。這兩種列不放標頭。
+  // 同一則回覆開好幾個 subagent 時，引擎把這些呼叫畫成自己的一列「N background agents launched」，mod 畫不到；
+  // 訊息列也不一定收合（只收 subagent 與背景工作的）。這兩種列不放標頭。
   const isAgents = (row: Row | undefined) => row?.kind === 'tools' && row.agents === true
-  const isGrouped = (row: Row, index: number) =>
-    row.kind === 'tools' && row.agents === true && (row.ids.length > 1 || isAgents(rows[index - 1]) || isAgents(rows[index + 1]))
-  const hosts = rows.flatMap((row, index) => (isWork(index) && row.kind !== 'note' && !isGrouped(row, index) ? [index] : []))
-  const firstAnswer = rows.findIndex((_, index) => !isWork(index))
-  const host =
-    (isOpen ? hosts[0] : (hosts.find(i => kinds[i] === 'tools') ?? hosts.find(i => kinds[i] === 'thought') ?? hosts[0])) ??
-    (firstAnswer === -1 ? undefined : firstAnswer)
-  const hasWork = rows.some((_, index) => isWork(index))
-  const header: Header = { turn: turn.id, label, isOpen }
+  const isGrouped = (index: number) => {
+    const row = rows[index]!
+    return row.kind === 'tools' && row.agents === true && (row.ids.length > 1 || isAgents(rows[index - 1]) || isAgents(rows[index + 1]))
+  }
+  const shown: View[] = rows.map(() => ({ kind: 'answer' }))
+  for (const { start, end } of spans) {
+    const group = groupOf(rows[start]!)
+    const isOpen = expanded.includes(group)
+    const header: Header = { group, label: labelOf(turn, start, end, spans.length, now), isOpen }
+    const members = rows.slice(start, end + 1).map((_, k) => start + k)
+    const hosts = members.filter(i => rows[i]!.kind !== 'note' && !isGrouped(i))
+    const host = isOpen ? hosts[0] : (hosts.find(i => rows[i]!.kind === 'tools') ?? hosts[0])
+    const after = rows[end + 1]
+    if (host === undefined && after?.kind !== 'text') {
+      continue
+    }
+    for (const i of members) {
+      shown[i] = i === host ? { kind: 'header', ...header } : { kind: 'work', group, isOpen }
+    }
+    if (host === undefined) {
+      shown[end + 1] = { kind: 'answer', header }
+    }
+  }
+  // 依列的順序寫：同一則回覆的思考與文字共用 uuid，後面的文字蓋過前面的思考。
   const out: Record<string, View> = {}
   rows.forEach((row, index) => {
-    const view: View =
-      !hasWork || host === undefined
-        ? { kind: 'answer' }
-        : !isWork(index)
-          ? index === host
-            ? { kind: 'answer', header }
-            : { kind: 'answer' }
-          : index === host
-            ? { kind: 'header', ...header }
-            : { kind: 'work', isOpen }
-    const ids = row.kind === 'tools' ? row.ids : row.kind === 'note' ? [row.id] : [row.id, row.key ?? null].filter(id => id !== null)
-    for (const id of ids) {
-      out[id] = view
+    for (const id of idsOf(row)) {
+      out[id] = shown[index]!
     }
   })
   return out

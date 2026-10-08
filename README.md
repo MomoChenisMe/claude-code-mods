@@ -9,7 +9,7 @@
 | mod | 用途 |
 | --- | --- |
 | [statusbar](statusbar/README.md) | 輸入框下方的狀態列：模型、effort，以及 ctx、5 小時、7 天、Fable 用量 |
-| [tidy](tidy/README.md) | 每一輪的工具呼叫和思考收成一行 `› 處理了 N 秒`，只留下你的訊息和最後回覆 |
+| [tidy](tidy/README.md) | Claude 寫的文字都留著，文字之間的工具呼叫和思考每一段收成一行 `› 處理了 N 秒` |
 
 ### statusbar
 
@@ -19,9 +19,9 @@
 
 ### tidy
 
-中間那行 `› 處理了 15 秒` 是收起來的工作過程，點一下才展開；下面標著 `✻` 的是最後回覆。
+標著 `✻` 的是 Claude 寫的文字（先寫的查法和最後的回答）；中間那行 `› 處理了 9 秒` 是收起來的工作過程，點一下才展開。
 
-![tidy 截圖：你的訊息、收起來的「› 處理了 15 秒」一行、開頭標著 ✻ 的最後回覆](tidy/docs/collapsed.png)
+![tidy 截圖：Claude 先寫了查法，接著的工作收成「› 處理了 9 秒」一行，最後的回答留在下面](tidy/docs/collapsed.png)
 
 ## 安裝
 
