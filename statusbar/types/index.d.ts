@@ -10,7 +10,7 @@ export type Usage = {
 }
 
 // 按了一次、等第二次按下確認的鈕，與第一次按下的時間。
-export type Armed = { command: 'compact' | 'clear'; at: number }
+export type Armed = { command: 'compact' | 'clear' | 'erase'; at: number }
 
 declare module 'claude-code' {
   interface PluginState {

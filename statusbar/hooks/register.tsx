@@ -103,15 +103,15 @@ const continueWork = ($: EngineInterface) => $.prompt.submit({ text: CONTINUE_TE
 // 清空輸入框。Claude 工作中按 Esc 會中斷這一輪而不是清掉打到一半的字，這顆鈕只清輸入框。
 const clearInput = ($: EngineInterface) => $.prompt.fill({ text: '' })
 
-// `/compact`、`/clear` 都會改掉整段對話，所以要按兩次：第一次只把鈕換成 `↓ compact?`、
-// `× clear?`，3 秒內再按同一顆才送出，否則恢復原狀；改按另一顆就換成等那一顆。
-// 比對指令與按下的時間，免得上一次的計時把新的一次提早收掉。
+// `/compact`、`/clear` 都會改掉整段對話，清空輸入框會丟掉打好的字，所以都要按兩次：第一次只把
+// 鈕換成 `↓ compact?`、`× clear?`、`⌫ clear input?`，3 秒內再按同一顆才執行，否則恢復原狀；
+// 改按另一顆就換成等那一顆。比對指令與按下的時間，免得上一次的計時把新的一次提早收掉。
 const CONFIRM_MS = 3000
 
 const pressTwice = async ($: EngineInterface, command: Armed['command']) => {
   if ((await read($, armed))?.command === command) {
     await update($, armed, () => null)
-    await run($, command)
+    await (command === 'erase' ? clearInput($) : run($, command))
     return
   }
   const at = await $.clock.now()
@@ -285,12 +285,12 @@ export const register: Register = on => {
     )
 
     // ctx 旁的 ↓ compact（把對話壓下去）、→ 送出「繼續工作」、× clear（清掉對話）、⌫ 清空輸入框；
-    // compact 與 clear 會改掉整段對話，要按兩次。
+    // ↓、×、⌫ 要按兩次，等第二次時鈕上寫著它的名稱。
     const waiting = (await read($, armed))?.command ?? null
-    const confirmButton = (command: Armed['command'], glyph: string) => (
+    const confirmButton = (command: Armed['command'], glyph: string, name: string = command) => (
       <Button
         key={command}
-        label={waiting === command ? `${glyph} ${command}?` : glyph}
+        label={waiting === command ? `${glyph} ${name}?` : glyph}
         plain
         dimColor={waiting !== command}
         hover={{ scope: `hint:${command}` }}
@@ -313,14 +313,7 @@ export const register: Register = on => {
         <Text> </Text>
         {confirmButton('clear', '×')}
         <Text> </Text>
-        <Button
-          key="erase"
-          label="⌫"
-          plain
-          dimColor
-          hover={{ scope: 'hint:erase' }}
-          onPress={() => void clearInput($)}
-        />
+        {confirmButton('erase', '⌫', 'clear input')}
       </Box>
     )
 

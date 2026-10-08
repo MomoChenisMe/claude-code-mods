@@ -287,9 +287,10 @@ test('按 ▾ 送出 /model、/effort，按一次 → 就以使用者的話送�
   expect(await ui.find({ type: 'Text', text: ' clear       ' })).toBeDefined()
 })
 
-test('按一次 ⌫ 清空輸入框，不送指令；Claude 工作中也一樣；滑鼠移上去浮出名稱', async ($, on) => {
+test('⌫ 也要按兩次：第一次換成 clear input?，3 秒內再按才清空輸入框；Claude 工作中也一樣', async ($, on) => {
   const ran: string[] = []
   const filled: string[] = []
+  const clock = mock.clock(on)
   buttons(on, ran)
   on('prompt.fill', ($, e) => {
     filled.push(e.text)
@@ -303,12 +304,21 @@ test('按一次 ⌫ 清空輸入框，不送指令；Claude 工作中也一樣�
     component: 'PromptHint',
     props: { ...HINT.props, isWorking: true },
   })
+  expect(await ui.find({ type: 'Text', text: ' clear input ' })).toBeDefined()
 
+  await ui.press({ key: 'erase' })
+  expect(filled).toEqual([])
+  expect(await ui.find({ type: 'Button', key: 'erase', text: '⌫ clear input?' })).toBeDefined()
+
+  await clock.advance(3000)
+  expect(await ui.find({ type: 'Button', key: 'erase', text: '⌫' })).toBeDefined()
+
+  await ui.press({ key: 'erase' })
+  await clock.advance(1000)
   await ui.press({ key: 'erase' })
   expect(filled).toEqual([''])
   expect(ran).toEqual([])
   expect(await ui.find({ type: 'Button', key: 'erase', text: '⌫' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' clear input ' })).toBeDefined()
 })
 
 for (const [command, glyph] of [

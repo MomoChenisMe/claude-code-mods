@@ -17,8 +17,8 @@ It adds two status rows under the Claude Code prompt (three in a narrow terminal
   - `↓` does what `/compact` typed in the prompt does; while the model replies, it waits for the turn to end.
   - `→` does what typing `繼續工作` ("continue working" in Chinese) and Enter in the prompt does, on one press; while the model replies, it waits for the turn to end.
   - `×` does what `/clear` does.
-  - `⌫` clears the prompt box, on one press. While Claude works, Esc stops the turn and does not clear what you typed. This button clears only the prompt box, and the work goes on.
-  - `↓` and `×` change the whole conversation, so each needs two presses, to prevent an accidental press: the first press changes it to `↓ compact?` or `× clear?`, and a second press on the same button within 3 seconds sends the command. Otherwise it changes back.
+  - `⌫` clears the prompt box. While Claude works, Esc stops the turn and does not clear what you typed. This button clears only the prompt box, and the work goes on.
+  - `↓` and `×` change the whole conversation, and `⌫` discards what you typed, so each needs two presses, to prevent an accidental press: the first press changes it to `↓ compact?`, `× clear?` or `⌫ clear input?`, and a second press on the same button within 3 seconds does the action. Otherwise it changes back.
 - The glyphs split the work: `▾` opens a picker; `→` tells the model to go on; `↓` (press down) and `×` (clear away) act on the conversation; `⌫` (erase) acts only on the prompt box.
 - **5h and 7d**: the 5-hour and weekly usage limits, followed by the reset time. Only subscription accounts have them.
 - **Fable**: the weekly Fable usage, followed by the reset time. It shows only when the account has a Fable limit.
@@ -53,7 +53,7 @@ It is not the `statusLine` setting in settings.json, and the two can show togeth
 
 - After a session starts, after `/clear` and after a compact, ctx is an estimate. It can differ from the real figure after the first reply by about 1 percentage point.
 - The text that `→` sends, `繼續工作`, is fixed Chinese. You cannot change it, and it does not follow the language setting.
-- For the 3 seconds while `↓` waits for the second press, the `compact?` text after it moves the right column 4 cells to the right. The column moves back after the press or the timeout.
+- For the 3 seconds while a button waits for the second press, the name after it pushes the right column to the right (about 6 cells for `compact?`, about 10 cells for `clear input?`). The column moves back after the press or the timeout.
 - ▾ is a small glyph next to a pill, not the pill: a mod button cannot set its text color, so a white-text pill can only be text.
 - Claude Code does not give the Fable usage to mods, so statusbar runs `claude -p /usage` in the background to read it: once when the session starts, then at most once every 5 minutes. Each run takes about 2 to 4 seconds and makes no model call. Thus the Fable number can be up to 5 minutes old.
 - After `/model`, the model name changes at once. The `/model` output has no effort, so the effort pill changes when you send the next message.
