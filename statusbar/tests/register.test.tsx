@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-import { bar, colorFor, fableUsage, modelName, pickerChange, pillColor } from '../hooks/register'
+import { bar, colorFor, fableUsage, modelName, pickerChange } from '../hooks/register'
 
 const HINT = {
   component: 'PromptHint',
@@ -16,9 +16,6 @@ test('模型名稱、進度條與用量顏色', () => {
   expect(colorFor(49)).toBe('success')
   expect(colorFor(80)).toBe('#ff8700')
   expect(colorFor(95)).toBe('error')
-  expect(pillColor(11)).toBe('#3a7cc0')
-  expect(pillColor(60)).toBe('#c9605f')
-  expect(pillColor(95)).toBe('#b03a3a')
 })
 
 test('從 claude -p /usage 讀出 Fable 的週用量', () => {
@@ -84,6 +81,55 @@ test('狀態列畫在輸入框下方，引擎的提示列保留在上面', async
   expect(await ui.find({ type: 'Text', text: '7d  ▱▱▱▱▱▱▱▱▱▱  --% ' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '? for shortcuts' })).toBeDefined()
 })
+
+for (const columns of [120, 60]) {
+  test(`百分比膠囊的底色和進度條同色（${columns} 欄）`, async ($, on) => {
+    on('session.model', () => ({ value: 'claude-opus-5-5' }))
+    on('session.usage', () => ({
+      value: {
+        startedAt: 0,
+        context: { window: 200000, percent: 12 },
+        rateLimits: [
+          { kind: 'seven_day', percentUsed: 58 },
+          { kind: 'five_hour', percentUsed: 80 },
+        ],
+      },
+    }))
+    on('settings.read', () => ({ value: { effortLevel: 'xhigh' } }))
+    on('process.run', () => ({
+      value: {
+        exitCode: 0,
+        stdout: 'Current week (Fable): 95% used\n',
+        stderr: '',
+        isStdoutTruncated: false,
+        isStderrTruncated: false,
+      },
+    }))
+    on('session.start', ($, e) => ({ cwd: e.cwd }))
+    on('ui.render', { component: 'PromptHint' }, ($, e) => {
+      const { Text } = $.ui.resolve(e)
+      return <Text dimColor>{e.props.hint}</Text>
+    })
+
+    await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+    const ui = await $.ui.mount({
+      plugin: 'statusbar',
+      surface: 'terminal',
+      viewport: { columns, rows: 30 },
+      ...HINT,
+    })
+
+    // 外層的列也是 Text、字一樣，所以挑有底色的那一個。
+    const pill = async (pct: string) =>
+      (await ui.findAll({ type: 'Text', text: new RegExp(`^ .*${pct} $`) })).find(
+        one => one.props.backgroundColor !== undefined,
+      )?.props
+    expect(await pill('12%')).toMatchObject({ backgroundColor: colorFor(12), color: '#ffffff' })
+    expect(await pill('58%')).toMatchObject({ backgroundColor: colorFor(58), color: '#ffffff' })
+    expect(await pill('80%')).toMatchObject({ backgroundColor: colorFor(80), color: '#ffffff' })
+    expect(await pill('95%')).toMatchObject({ backgroundColor: colorFor(95), color: '#ffffff' })
+  })
+}
 
 test('終端機比寬版窄時，三列兩欄、標籤放進百分比膠囊，不畫進度條', async ($, on) => {
   on('session.model', () => ({ value: 'claude-opus-5-5' }))

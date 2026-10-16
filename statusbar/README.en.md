@@ -22,8 +22,8 @@ It adds two status rows under the Claude Code prompt (three in a narrow terminal
 - The glyphs split the work: `▾` opens a picker; `→` tells the model to go on; `↓` (press down) and `×` (clear away) act on the conversation; `⌫` (erase) acts only on the prompt box.
 - **5h and 7d**: the 5-hour and weekly usage limits, followed by the reset time. Only subscription accounts have them.
 - **Fable**: the weekly Fable usage, followed by the reset time. It shows only when the account has a Fable limit.
-- Each bar has the color of its level: below 50% green, below 75% yellow, below 90% orange, else red. Each percentage pill has this background: below 50% blue, below 75% rose, else red.
-- The percentage pills always have white text on a dark background. They do not follow the theme.
+- Each bar and its percentage pill share the color of the level: below 50% green, below 75% yellow, below 90% orange, else red.
+- The percentage pills always have white text. They do not follow the theme.
 - Claude Code's own hint line (`? for shortcuts`, `auto mode on`) still shows on top, and the status rows come under it.
 
 If the terminal is less than 85 columns wide, the status rows change to a narrow layout: three rows, two columns, and no bars. The model and the effort are at the top of the two columns, and each usage label goes into its percentage pill, so the pills in each column line up. The usage pairs stay the same as in the wide layout:
