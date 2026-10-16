@@ -20,11 +20,8 @@ const EFFORT_COLOR: Record<string, string> = {
   max: 'error',
 }
 
-// 百分比膠囊固定白字，底色由藍到紅，任何主題都讀得清楚。
+// 百分比膠囊固定白字，底色和旁邊的進度條同色。
 const WHITE = '#ffffff'
-const BLUE = '#3a7cc0'
-const ROSE = '#c9605f'
-const RED = '#b03a3a'
 
 // 寬版（兩列三欄、有進度條）要的寬度；終端機比這窄就改用三列兩欄、標籤放進百分比膠囊的窄版。
 const WIDE_COLUMNS = 85
@@ -38,12 +35,9 @@ export const modelName = (id: string) => {
   return `${family.charAt(0).toUpperCase()}${family.slice(1)} ${version.join('.')}`.trim()
 }
 
-// <50 綠、<75 黃、<90 橘、其餘紅。
+// 進度條和百分比膠囊共用的顏色：<50 綠、<75 黃、<90 橘、其餘紅。
 export const colorFor = (pct: number) =>
   pct < 50 ? 'success' : pct < 75 ? 'warning' : pct < 90 ? ORANGE : 'error'
-
-// 百分比膠囊的底色：<50 藍、<75 玫瑰紅、其餘紅。
-export const pillColor = (pct: number) => (pct < 50 ? BLUE : pct < 75 ? ROSE : RED)
 
 const percent = (pct: number | null) => (pct === null ? '--%' : `${Math.round(pct)}%`)
 
@@ -271,7 +265,7 @@ export const register: Register = on => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const u = await read($, usage)
 
-    // 模型、effort 的膠囊字色跟著主題反白；百分比膠囊固定白字。
+    // 模型、effort 的膠囊字色跟著主題反白；百分比膠囊固定白字，底色和進度條同色。
     const pill = (text: string, background: string, color: string) => (
       <Text backgroundColor={background} color={color} bold>
         {` ${text} `}
@@ -326,7 +320,7 @@ export const register: Register = on => {
         pct === null ? (
           <Text dimColor>{` ${narrowText(label, pct)} `}</Text>
         ) : (
-          pill(narrowText(label, pct), pillColor(pct), WHITE)
+          pill(narrowText(label, pct), colorFor(pct), WHITE)
         )
       ) : (
         <Text>
@@ -334,7 +328,7 @@ export const register: Register = on => {
           <Text color={pct === null ? undefined : colorFor(pct)} dimColor={pct === null}>
             {`${bar(pct ?? 0, width)} `}
           </Text>
-          {pct === null ? <Text dimColor>{` ${percent(pct)} `}</Text> : pill(percent(pct), pillColor(pct), WHITE)}
+          {pct === null ? <Text dimColor>{` ${percent(pct)} `}</Text> : pill(percent(pct), colorFor(pct), WHITE)}
         </Text>
       )
 
