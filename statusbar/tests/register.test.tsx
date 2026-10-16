@@ -134,7 +134,7 @@ test('設定 bars 關掉時，寬版不畫進度條，標籤仍是灰字、百�
     value: {
       startedAt: 0,
       context: { window: 200000, percent: 38 },
-      rateLimits: [{ kind: 'five_hour', percentUsed: 41 }],
+      rateLimits: [{ kind: 'five_hour', percentUsed: 5 }],
     },
   }))
   on('settings.read', () => ({ value: { effortLevel: 'xhigh' } }))
@@ -167,7 +167,8 @@ test('設定 bars 關掉時，寬版不畫進度條，標籤仍是灰字、百�
   expect(label).toContainEqual({ dimColor: true })
   const pct = (await ui.findAll({ type: 'Text', text: ' 38% ' })).map(one => one.props)
   expect(pct.some(props => props.backgroundColor !== undefined)).toBe(true)
-  expect(await ui.find({ type: 'Text', text: '5h     41% ' })).toBeDefined()
+  // 個位數也補到 3 格，膠囊和兩位數的一樣寬。
+  expect(await ui.find({ type: 'Text', text: '   5% ' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '7d   --% ' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: 'Fable  17% ' })).toBeDefined()
   expect(await ui.find({ type: 'Button', key: 'compact', text: '↓' })).toBeDefined()
@@ -197,7 +198,7 @@ test('/clear 之後沒有 session.start，模型、effort 與用量仍然補讀'
   expect(await ui.find({ type: 'Text', text: ' xhigh ' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '7d  ▰▰▰▱▱▱▱▱▱▱  33% ' })).toBeDefined()
   // 還沒有回覆、也估不出來時，ctx 畫成 0%。
-  expect(await ui.find({ type: 'Text', text: 'ctx ▱▱▱▱▱▱▱▱▱▱  0% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'ctx ▱▱▱▱▱▱▱▱▱▱   0% ' })).toBeDefined()
 })
 
 test('第一次回覆前先用本機估算的 ctx', async ($, on) => {
@@ -224,15 +225,15 @@ test('第一次回覆前先用本機估算的 ctx', async ($, on) => {
   const ui = await $.ui.mount({ plugin: 'statusbar', surface: 'terminal', ...HINT })
 
   // 8000 / 200000 = 4%。
-  expect(await ui.find({ type: 'Text', text: 'ctx ▱▱▱▱▱▱▱▱▱▱  4% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'ctx ▱▱▱▱▱▱▱▱▱▱   4% ' })).toBeDefined()
 
   // 開 session 後引擎會先量一次，還沒有 ctx：估算值不能被蓋掉。
   await $.session.measure({ context: { window: 200000 }, rateLimits: [], changed: [] })
-  expect(await ui.find({ type: 'Text', text: 'ctx ▱▱▱▱▱▱▱▱▱▱  4% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'ctx ▱▱▱▱▱▱▱▱▱▱   4% ' })).toBeDefined()
 
   // 第一次回覆後量到實際值。
   await $.session.measure({ context: { window: 200000, percent: 6 }, rateLimits: [], changed: [] })
-  expect(await ui.find({ type: 'Text', text: 'ctx ▰▱▱▱▱▱▱▱▱▱  6% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'ctx ▰▱▱▱▱▱▱▱▱▱   6% ' })).toBeDefined()
 })
 
 test('/resume 之後沒有 session.start，ctx 照接回的對話最後一次回覆算', async ($, on) => {
@@ -291,7 +292,7 @@ test('compact 之後 ctx 改用本機估算，不停在 compact 前的數字', a
 
   await $.session.compact({ trigger: 'manual', messages: summary } as never)
   await clock.advance(0)
-  expect(await ui.find({ type: 'Text', text: 'ctx ▱▱▱▱▱▱▱▱▱▱  4% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'ctx ▱▱▱▱▱▱▱▱▱▱   4% ' })).toBeDefined()
 })
 
 // 按鈕測試的引擎替身：記下送出的指令與訊息。

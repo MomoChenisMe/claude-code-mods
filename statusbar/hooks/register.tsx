@@ -45,7 +45,8 @@ export const colorFor = (pct: number) =>
 // 百分比膠囊的底色：<50 藍、<75 玫瑰紅、其餘紅。
 export const pillColor = (pct: number) => (pct < 50 ? BLUE : pct < 75 ? ROSE : RED)
 
-const percent = (pct: number | null) => (pct === null ? '--%' : `${Math.round(pct)}%`)
+// 補到 3 格，5% 和 13% 的膠囊一樣寬。
+const percent = (pct: number | null) => (pct === null ? '--%' : `${Math.round(pct)}%`).padStart(3)
 
 export const bar = (pct: number, width: number) => {
   const filled = Math.max(0, Math.min(width, Math.round((pct / 100) * width)))
@@ -323,7 +324,7 @@ export const register: Register = (on, options) => {
     // 寬版 `ctx ▰▰▰▰▱▱▱▱▱▱ [38%]`，進度條依用量上色。窄版沒有進度條，標籤放進膠囊 `[ctx 38%]`，
     // 百分比靠右補到 3 格，同一欄的膠囊一樣寬。標籤都補到同欄一樣寬。
     const isNarrow = (e.viewport?.columns ?? WIDE_COLUMNS) < WIDE_COLUMNS
-    const narrowText = (label: string, pct: number | null) => `${label} ${percent(pct).padStart(3)}`
+    const narrowText = (label: string, pct: number | null) => `${label} ${percent(pct)}`
     const gauge = (label: string, pct: number | null, width: number) =>
       isNarrow ? (
         pct === null ? (
