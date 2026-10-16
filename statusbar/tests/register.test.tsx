@@ -128,6 +128,47 @@ test('終端機比寬版窄時，三列兩欄、標籤放進百分比膠囊，�
   expect(await ui.find({ type: 'Text', text: /▰|▱/ })).toBeUndefined()
 })
 
+test('設定 bars 關掉時，寬版仍是兩列三欄，但不畫進度條，百分比用膠囊', { options: { bars: false } }, async ($, on) => {
+  on('session.model', () => ({ value: 'claude-opus-5-5' }))
+  on('session.usage', () => ({
+    value: {
+      startedAt: 0,
+      context: { window: 200000, percent: 38 },
+      rateLimits: [{ kind: 'five_hour', percentUsed: 41 }],
+    },
+  }))
+  on('settings.read', () => ({ value: { effortLevel: 'xhigh' } }))
+  on('process.run', () => ({
+    value: {
+      exitCode: 0,
+      stdout: 'Current week (Fable): 17% used\n',
+      stderr: '',
+      isStdoutTruncated: false,
+      isStderrTruncated: false,
+    },
+  }))
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('ui.render', { component: 'PromptHint' }, ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return <Text dimColor>{e.props.hint}</Text>
+  })
+
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({
+    plugin: 'statusbar',
+    surface: 'terminal',
+    viewport: { columns: 120, rows: 30 },
+    ...HINT,
+  })
+
+  expect(await ui.find({ type: 'Text', text: ' ctx 38% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' 5h    41% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' 7d  --% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' Fable 17% ' })).toBeDefined()
+  expect(await ui.find({ type: 'Button', key: 'compact', text: '↓' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /▰|▱/ })).toBeUndefined()
+})
+
 test('/clear 之後沒有 session.start，模型、effort 與用量仍然補讀', async ($, on) => {
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
   on('session.usage', () => ({

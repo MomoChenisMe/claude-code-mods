@@ -195,7 +195,10 @@ const refreshFable = async ($: EngineInterface) => {
   }
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  // 設定的 bars 關掉時，寬版也不畫進度條，百分比改用窄版的膠囊樣式，版面仍是兩列三欄。
+  const showBars = options.bars !== false
+
   on('session.start', async ($, e, next) => {
     interactive = e.isInteractive
     await refresh($)
@@ -320,9 +323,10 @@ export const register: Register = on => {
     // 寬版 `ctx ▰▰▰▰▱▱▱▱▱▱ [38%]`，進度條依用量上色。窄版沒有進度條，標籤放進膠囊 `[ctx 38%]`，
     // 百分比靠右補到 3 格，同一欄的膠囊一樣寬。標籤都補到同欄一樣寬。
     const isNarrow = (e.viewport?.columns ?? WIDE_COLUMNS) < WIDE_COLUMNS
+    const isPill = isNarrow || !showBars
     const narrowText = (label: string, pct: number | null) => `${label} ${percent(pct).padStart(3)}`
     const gauge = (label: string, pct: number | null, width: number) =>
-      isNarrow ? (
+      isPill ? (
         pct === null ? (
           <Text dimColor>{` ${narrowText(label, pct)} `}</Text>
         ) : (
@@ -366,7 +370,9 @@ export const register: Register = on => {
     const modelColumn = Math.max(modelName(u.model).length, u.effort?.length ?? 0) + 3 + 3
     const buttonsAt = isNarrow
       ? narrowText('ctx', ctxPercent).length + 2 + 1
-      : modelColumn + 4 + 11 + percent(ctxPercent).length + 2 + 1
+      : isPill
+        ? modelColumn + narrowText('ctx', ctxPercent).length + 2 + 1
+        : modelColumn + 4 + 11 + percent(ctxPercent).length + 2 + 1
     const hoverLabel = (scope: string, text: string) => (
       <Box
         position="absolute"
