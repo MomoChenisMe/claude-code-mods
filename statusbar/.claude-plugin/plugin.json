@@ -10,7 +10,7 @@
     "bars": {
       "type": "boolean",
       "title": "Usage bars",
-      "description": "Draw a bar beside each usage percentage in the wide layout. Off draws the percentages as labelled pills, as the narrow layout does, and keeps the two-row layout.",
+      "description": "Draw a bar beside each usage percentage in the wide layout. Off drops the bars and keeps the labels and percentage pills as they are.",
       "default": true
     }
   }
