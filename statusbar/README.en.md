@@ -49,6 +49,10 @@ The first time, Claude Code asks to add the `github:MomoChenisMe/claude-code-mod
 
 It is not the `statusLine` setting in settings.json, and the two can show together. To see only one line, remove `statusLine`.
 
+## Settings
+
+- **bars** (on by default): whether the wide layout draws a bar beside each usage percentage. Off drops the bars alone and keeps the labels and percentage pills as they are (`ctx [24%]`), in the same two-row, three-column layout, which then takes about 50 columns instead of 75. Toggle it as statusbar's Usage bars in `/config`, or on the settings screen at install.
+
 ## Known limits
 
 - After a session starts, after `/clear` and after a compact, ctx is an estimate. It can differ from the real figure after the first reply by about 1 percentage point.

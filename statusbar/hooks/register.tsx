@@ -45,7 +45,8 @@ export const colorFor = (pct: number) =>
 // 百分比膠囊的底色：<50 藍、<75 玫瑰紅、其餘紅。
 export const pillColor = (pct: number) => (pct < 50 ? BLUE : pct < 75 ? ROSE : RED)
 
-const percent = (pct: number | null) => (pct === null ? '--%' : `${Math.round(pct)}%`)
+// 補到 3 格，5% 和 13% 的膠囊一樣寬。
+const percent = (pct: number | null) => (pct === null ? '--%' : `${Math.round(pct)}%`).padStart(3)
 
 export const bar = (pct: number, width: number) => {
   const filled = Math.max(0, Math.min(width, Math.round((pct / 100) * width)))
@@ -195,7 +196,10 @@ const refreshFable = async ($: EngineInterface) => {
   }
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  // 設定的 bars 關掉時，寬版不畫進度條，其餘照舊：標籤是灰字，只有百分比在膠囊裡。
+  const showBars = options.bars !== false
+
   on('session.start', async ($, e, next) => {
     interactive = e.isInteractive
     await refresh($)
@@ -320,7 +324,7 @@ export const register: Register = on => {
     // 寬版 `ctx ▰▰▰▰▱▱▱▱▱▱ [38%]`，進度條依用量上色。窄版沒有進度條，標籤放進膠囊 `[ctx 38%]`，
     // 百分比靠右補到 3 格，同一欄的膠囊一樣寬。標籤都補到同欄一樣寬。
     const isNarrow = (e.viewport?.columns ?? WIDE_COLUMNS) < WIDE_COLUMNS
-    const narrowText = (label: string, pct: number | null) => `${label} ${percent(pct).padStart(3)}`
+    const narrowText = (label: string, pct: number | null) => `${label} ${percent(pct)}`
     const gauge = (label: string, pct: number | null, width: number) =>
       isNarrow ? (
         pct === null ? (
@@ -331,9 +335,11 @@ export const register: Register = on => {
       ) : (
         <Text>
           <Text dimColor>{`${label} `}</Text>
-          <Text color={pct === null ? undefined : colorFor(pct)} dimColor={pct === null}>
-            {`${bar(pct ?? 0, width)} `}
-          </Text>
+          {showBars && (
+            <Text color={pct === null ? undefined : colorFor(pct)} dimColor={pct === null}>
+              {`${bar(pct ?? 0, width)} `}
+            </Text>
+          )}
           {pct === null ? <Text dimColor>{` ${percent(pct)} `}</Text> : pill(percent(pct), pillColor(pct), WHITE)}
         </Text>
       )
@@ -366,7 +372,7 @@ export const register: Register = on => {
     const modelColumn = Math.max(modelName(u.model).length, u.effort?.length ?? 0) + 3 + 3
     const buttonsAt = isNarrow
       ? narrowText('ctx', ctxPercent).length + 2 + 1
-      : modelColumn + 4 + 11 + percent(ctxPercent).length + 2 + 1
+      : modelColumn + 4 + (showBars ? 11 : 0) + percent(ctxPercent).length + 2 + 1
     const hoverLabel = (scope: string, text: string) => (
       <Box
         position="absolute"
