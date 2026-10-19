@@ -109,14 +109,22 @@ const clearInput = ($: EngineInterface) => $.prompt.fill({ text: '' })
 // 改按另一顆就換成等那一顆。比對指令與按下的時間，免得上一次的計時把新的一次提早收掉。
 const CONFIRM_MS = 3000
 
+// 按 Esc 中斷後、使用者自己送出輸入前，引擎只收按下當下送出的指令：onPress 回傳的 promise 還沒
+// 結束（最多 10 秒）才算。所以第二次按下在回傳前送出指令，但不等它跑完：compact 會超過 10 秒，
+// 模型回覆中還要排隊。3 秒的計時也不留在按下裡。
 const pressTwice = async ($: EngineInterface, command: Armed['command']) => {
   if ((await read($, armed))?.command === command) {
     await update($, armed, () => null)
-    await (command === 'erase' ? clearInput($) : run($, command))
+    void (command === 'erase' ? clearInput($) : run($, command))
     return
   }
   const at = await $.clock.now()
   await update($, armed, () => ({ command, at }))
+  void disarmLater($, command, at)
+}
+
+// 3 秒內沒有第二次按下就恢復原狀。
+const disarmLater = async ($: EngineInterface, command: Armed['command'], at: number) => {
   try {
     await $.clock.sleep(CONFIRM_MS)
   } catch {
@@ -298,7 +306,7 @@ export const register: Register = (on, options) => {
         plain
         dimColor={waiting !== command}
         hover={{ scope: `hint:${command}` }}
-        onPress={() => void pressTwice($, command)}
+        onPress={() => pressTwice($, command)}
       />
     )
     // 和膠囊之間空一格，跟 7d、5h 那幾列的重置時間一樣。
